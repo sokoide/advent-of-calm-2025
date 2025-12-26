@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/patterns/web-app-pattern.json",
+  "title": "Web Application Pattern",
+  "description": "A standard pattern for a 3-tier web application consisting of a frontend, an API service, and a database.",
+  "type": "object",
+  "properties": {
+    "nodes": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        {
+          "type": "object",
+          "properties": {
+            "unique-id": { "const": "web-frontend" },
+            "node-type": { "const": "webclient" },
+            "name": { "const": "Web Frontend" }
+          },
+          "required": ["unique-id", "node-type", "name"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "unique-id": { "const": "api-service" },
+            "node-type": { "const": "service" },
+            "name": { "const": "API Service" }
+          },
+          "required": ["unique-id", "node-type", "name"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "unique-id": { "const": "app-database" },
+            "node-type": { "const": "database" },
+            "name": { "const": "Application Database" }
+          },
+          "required": ["unique-id", "node-type", "name"]
+        }
+      ]
+    },
+    "relationships": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {
+          "type": "object",
+          "properties": {
+            "unique-id": { "const": "frontend-to-api" },
+            "relationship-type": {
+              "type": "object",
+              "properties": {
+                "connects": {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "object",
+                      "properties": { "node": { "const": "web-frontend" } }
+                    },
+                    "destination": {
+                      "type": "object",
+                      "properties": { "node": { "const": "api-service" } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "unique-id": { "const": "api-to-database" },
+            "relationship-type": {
+              "type": "object",
+              "properties": {
+                "connects": {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "object",
+                      "properties": { "node": { "const": "api-service" } }
+                    },
+                    "destination": {
+                      "type": "object",
+                      "properties": { "node": { "const": "app-database" } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "required": ["nodes", "relationships"]
+}
