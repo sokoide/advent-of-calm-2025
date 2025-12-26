@@ -23,10 +23,18 @@
             "description": "A service that handles credit card transactions.",
             "interfaces": [
                 {
-                    "unique-id": "payment-api",
+                    "unique-id": "payment-api-https",
                     "name": "Payment API",
-                    "description": "REST API for processing payments",
-                    "protocol": "HTTPS"
+                    "protocol": "HTTPS",
+                    "host": "api.example.com",
+                    "port": 443,
+                    "path": "/api/v1"
+                },
+                {
+                    "unique-id": "db-client",
+                    "name": "Database Client",
+                    "protocol": "JDBC",
+                    "description": "Outbound connection to the transaction database."
                 }
             ]
         },
@@ -39,8 +47,19 @@
                 {
                     "unique-id": "sql-port",
                     "name": "SQL Port",
-                    "description": "Database connection port",
-                    "protocol": "JDBC"
+                    "description": "JDBC interface for database access.",
+                    "protocol": "JDBC",
+                    "host": "db.example.com",
+                    "port": 5432,
+                    "database": "payment_transactions"
+                },
+                {
+                    "unique-id": "db-read-replica",
+                    "name": "Read Replica Port",
+                    "protocol": "JDBC",
+                    "host": "db-replica.example.com",
+                    "port": 5432,
+                    "database": "payment_transactions"
                 }
             ]
         }
@@ -62,7 +81,8 @@
             "relationship-type": {
                 "connects": {
                     "source": {
-                        "node": "payment-processing-service"
+                        "node": "payment-processing-service",
+                        "interfaces": ["db-client"]
                     },
                     "destination": {
                         "node": "transaction-db",
