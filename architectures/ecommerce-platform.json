@@ -1,0 +1,331 @@
+{
+    "$schema": "https://calm.finos.org/release/1.1/meta/calm.json",
+    "unique-id": "ecommerce-platform-architecture",
+    "name": "E-Commerce Order Processing Platform",
+    "description": "A complete architecture for an e-commerce order processing system.",
+    "metadata": {
+        "owner": "Architecture Team",
+        "version": "1.0.0",
+        "created": "2025-12-26",
+        "description": "E-commerce order processing platform architecture demo.",
+        "tags": ["ecommerce", "microservices", "orders"]
+    },
+    "nodes": [
+        {
+            "unique-id": "customer",
+            "node-type": "actor",
+            "name": "Customer",
+            "description": "A user who browses and purchases products."
+        },
+        {
+            "unique-id": "admin",
+            "node-type": "actor",
+            "name": "Admin",
+            "description": "A staff member who manages products and orders."
+        },
+        {
+            "unique-id": "ecommerce-system",
+            "node-type": "system",
+            "name": "E-Commerce Platform",
+            "description": "The overall e-commerce system containing microservices."
+        },
+        {
+            "unique-id": "api-gateway",
+            "node-type": "service",
+            "name": "API Gateway",
+            "description": "Entry point for all client requests.",
+            "metadata": {
+                "tech-owner": "Edge Team",
+                "repository": "https://github.com/example/api-gateway",
+                "deployment-type": "container",
+                "business-criticality": "high"
+            },
+            "interfaces": [
+                {
+                    "unique-id": "gateway-https",
+                    "name": "Public API Interface",
+                    "protocol": "HTTPS",
+                    "host": "api.shop.example.com",
+                    "port": 443,
+                    "path": "/"
+                },
+                {
+                    "unique-id": "order-client",
+                    "protocol": "REST",
+                    "description": "Outbound connection to Order Service"
+                },
+                {
+                    "unique-id": "inventory-client",
+                    "protocol": "REST",
+                    "description": "Outbound connection to Inventory Service"
+                },
+                {
+                    "unique-id": "gateway-health",
+                    "name": "Health Check",
+                    "protocol": "HTTP",
+                    "path": "/health"
+                }
+            ]
+        },
+        {
+            "unique-id": "order-service",
+            "node-type": "service",
+            "name": "Order Service",
+            "description": "Handles order creation and lifecycle management.",
+            "metadata": {
+                "tech-owner": "Order Team",
+                "repository": "https://github.com/example/order-service",
+                "deployment-type": "container",
+                "sla-tier": "tier-1",
+                "business-criticality": "high"
+            },
+            "interfaces": [
+                {
+                    "unique-id": "order-api",
+                    "name": "Order API",
+                    "protocol": "REST",
+                    "port": 8080
+                },
+                {
+                    "unique-id": "order-db-client",
+                    "protocol": "JDBC"
+                },
+                {
+                    "unique-id": "payment-client",
+                    "protocol": "REST"
+                },
+                {
+                    "unique-id": "order-inventory-client",
+                    "protocol": "REST",
+                    "description": "Outbound connection to check inventory"
+                },
+                {
+                    "unique-id": "order-health",
+                    "name": "Health Check",
+                    "protocol": "HTTP",
+                    "path": "/health"
+                }
+            ]
+        },
+        {
+            "unique-id": "inventory-service",
+            "node-type": "service",
+            "name": "Inventory Service",
+            "description": "Manages product stock levels.",
+            "metadata": {
+                "tech-owner": "Warehouse Team",
+                "repository": "https://github.com/example/inventory-service",
+                "deployment-type": "container",
+                "business-criticality": "high"
+            },
+            "interfaces": [
+                {
+                    "unique-id": "inventory-api",
+                    "name": "Inventory API",
+                    "protocol": "REST",
+                    "port": 8081
+                },
+                {
+                    "unique-id": "inventory-db-client",
+                    "protocol": "JDBC"
+                },
+                {
+                    "unique-id": "inventory-health",
+                    "name": "Health Check",
+                    "protocol": "HTTP",
+                    "path": "/health"
+                }
+            ]
+        },
+        {
+            "unique-id": "payment-service",
+            "node-type": "service",
+            "name": "Payment Service",
+            "description": "Integrates with external payment providers.",
+            "metadata": {
+                "tech-owner": "Payment Team",
+                "repository": "https://github.com/example/payment-service",
+                "deployment-type": "serverless",
+                "business-criticality": "high"
+            },
+            "interfaces": [
+                {
+                    "unique-id": "payment-api",
+                    "name": "Payment Processing API",
+                    "protocol": "REST",
+                    "port": 8082
+                },
+                {
+                    "unique-id": "payment-health",
+                    "name": "Health Check",
+                    "protocol": "HTTP",
+                    "path": "/health"
+                }
+            ]
+        },
+        {
+            "unique-id": "order-db",
+            "node-type": "database",
+            "name": "Order Database",
+            "description": "Relational database for orders.",
+            "metadata": {
+                "tech-owner": "DBA Team",
+                "deployment-type": "managed-service",
+                "data-classification": "PII"
+            },
+            "interfaces": [
+                {
+                    "unique-id": "order-sql",
+                    "protocol": "JDBC",
+                    "host": "orders-db.example.com",
+                    "port": 5432,
+                    "database": "orders_v1"
+                }
+            ]
+        },
+        {
+            "unique-id": "inventory-db",
+            "node-type": "database",
+            "name": "Inventory Database",
+            "description": "Stores stock levels.",
+            "metadata": {
+                "tech-owner": "DBA Team",
+                "deployment-type": "managed-service"
+            },
+            "interfaces": [
+                {
+                    "unique-id": "inventory-sql",
+                    "protocol": "JDBC",
+                    "host": "inventory-db.example.com",
+                    "port": 5432,
+                    "database": "inventory_v1"
+                }
+            ]
+        }
+    ],
+    "relationships": [
+        {
+            "unique-id": "customer-interacts-gateway",
+            "description": "Customer accesses the platform via API Gateway.",
+            "relationship-type": {
+                "interacts": {
+                    "actor": "customer",
+                    "nodes": ["api-gateway"]
+                }
+            }
+        },
+        {
+            "unique-id": "admin-interacts-gateway",
+            "description": "Admin manages the platform via API Gateway.",
+            "relationship-type": {
+                "interacts": {
+                    "actor": "admin",
+                    "nodes": ["api-gateway"]
+                }
+            }
+        },
+        {
+            "unique-id": "gateway-connects-order",
+            "description": "API Gateway forwards order requests to Order Service.",
+            "metadata": {
+                "latency-sla": "< 50ms",
+                "monitoring": true,
+                "circuit-breaker": true
+            },
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "api-gateway", "interfaces": ["order-client"] },
+                    "destination": { "node": "order-service", "interfaces": ["order-api"] }
+                }
+            }
+        },
+        {
+            "unique-id": "gateway-connects-inventory",
+            "description": "API Gateway forwards inventory requests to Inventory Service.",
+            "metadata": {
+                "latency-sla": "< 50ms",
+                "monitoring": true,
+                "circuit-breaker": true
+            },
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "api-gateway", "interfaces": ["inventory-client"] },
+                    "destination": { "node": "inventory-service", "interfaces": ["inventory-api"] }
+                }
+            }
+        },
+        {
+            "unique-id": "order-connects-db",
+            "description": "Order Service persists data to Order Database.",
+            "metadata": {
+                "monitoring": true
+            },
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "order-service", "interfaces": ["order-db-client"] },
+                    "destination": { "node": "order-db", "interfaces": ["order-sql"] }
+                }
+            }
+        },
+        {
+            "unique-id": "order-connects-payment",
+            "description": "Order Service initiates payments via Payment Service.",
+            "metadata": {
+                "latency-sla": "< 500ms",
+                "monitoring": true,
+                "circuit-breaker": true
+            },
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "order-service", "interfaces": ["payment-client"] },
+                    "destination": { "node": "payment-service", "interfaces": ["payment-api"] }
+                }
+            }
+        },
+        {
+            "unique-id": "order-connects-inventory",
+            "description": "Order Service checks/reserves stock in Inventory Service.",
+            "metadata": {
+                "latency-sla": "< 100ms",
+                "monitoring": true,
+                "circuit-breaker": true
+            },
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "order-service", "interfaces": ["order-inventory-client"] },
+                    "destination": { "node": "inventory-service", "interfaces": ["inventory-api"] }
+                }
+            }
+        },
+        {
+            "unique-id": "inventory-connects-db",
+            "description": "Inventory Service manages stock in Inventory Database.",
+            "metadata": {
+                "monitoring": true
+            },
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "inventory-service", "interfaces": ["inventory-db-client"] },
+                    "destination": { "node": "inventory-db", "interfaces": ["inventory-sql"] }
+                }
+            }
+        },
+        {
+            "unique-id": "ecommerce-system-composition",
+            "description": "The E-Commerce Platform comprises its core services and databases.",
+            "relationship-type": {
+                "composed-of": {
+                    "container": "ecommerce-system",
+                    "nodes": [
+                        "api-gateway",
+                        "order-service",
+                        "inventory-service",
+                        "payment-service",
+                        "order-db",
+                        "inventory-db"
+                    ]
+                }
+            }
+        }
+    ]
+}
