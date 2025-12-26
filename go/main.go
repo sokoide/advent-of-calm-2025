@@ -42,7 +42,9 @@ func setupGeneralInfo(a *Architecture) {
 }
 
 func addGlobalControls(a *Architecture) {
-	a.Control("security", "Data encryption and secure communication requirements",
+	a.Control(
+		"security",
+		"Data encryption and secure communication requirements",
 		NewRequirement(
 			"https://internal-policy.example.com/security/encryption-at-rest",
 			NewSecurityConfig("AES-256", "all-data-stores"),
@@ -51,23 +53,25 @@ func addGlobalControls(a *Architecture) {
 			"https://internal-policy.example.com/security/tls-1-3-minimum",
 			"https://configs.example.com/security/tls-config.yaml",
 		),
-	).
-		Control("performance", "System-wide performance and scalability requirements",
-			NewRequirement(
-				"https://internal-policy.example.com/performance/response-time-sla",
-				NewPerformanceConfig(200, 100),
-			),
-			NewRequirementURL(
-				"https://internal-policy.example.com/performance/availability-target",
-				"https://configs.example.com/infra/ha-config.yaml",
-			),
-		).
-		Control("high-availability", "System-wide uptime and availability requirements",
-			NewRequirement(
-				"https://internal-policy.example.com/resilience/availability-sla",
-				NewAvailabilityConfig(99.9, 60),
-			),
-		)
+	).Control(
+		"performance",
+		"System-wide performance and scalability requirements",
+		NewRequirement(
+			"https://internal-policy.example.com/performance/response-time-sla",
+			NewPerformanceConfig(200, 100),
+		),
+		NewRequirementURL(
+			"https://internal-policy.example.com/performance/availability-target",
+			"https://configs.example.com/infra/ha-config.yaml",
+		),
+	).Control(
+		"high-availability",
+		"System-wide uptime and availability requirements",
+		NewRequirement(
+			"https://internal-policy.example.com/resilience/availability-sla",
+			NewAvailabilityConfig(99.9, 60),
+		),
+	)
 }
 
 func addFlows(a *Architecture) {
@@ -137,17 +141,6 @@ func addNodes(a *Architecture) {
 	lb.Interface("lb-https", "HTTPS").SetName("Public HTTPS Interface").SetPort(443).SetHost("api.shop.example.com")
 	lb.Interface("lb-to-gateway", "HTTP").SetDesc("Outbound to API Gateways")
 
-	gwPerf := []Requirement{
-		NewRequirementURL(
-			"https://internal-policy.example.com/performance/rate-limiting",
-			"https://configs.example.com/gateway/rate-limits.yaml",
-		),
-		NewRequirement(
-			"https://internal-policy.example.com/performance/caching-policy",
-			map[string]any{"default-ttl-seconds": 300, "cache-control": "private"},
-		),
-	}
-
 	for i := 1; i <= 2; i++ {
 		id := fmt.Sprintf("api-gateway-%d", i)
 		name := fmt.Sprintf("API Gateway Instance %d", i)
@@ -166,8 +159,19 @@ func addNodes(a *Architecture) {
 			AddMeta("log-query", fmt.Sprintf("service:api-gateway AND instance:%d", i)).
 			AddMeta("alerts", []string{"Gateway-5xx-Rate", "Gateway-HighLatency"}).
 			AddMeta("repository", "https://github.com/example/api-gateway").
-			AddMeta("deployment-type", "container").AddMeta("business-criticality", "high")
-		gw.Control("performance", "API Gateway rate limiting and caching requirements", gwPerf...)
+			AddMeta("deployment-type", "container").AddMeta("business-criticality", "high").
+			Control(
+				"performance",
+				"API Gateway rate limiting and caching requirements",
+				NewRequirementURL(
+					"https://internal-policy.example.com/performance/rate-limiting",
+					"https://configs.example.com/gateway/rate-limits.yaml",
+				),
+				NewRequirement(
+					"https://internal-policy.example.com/performance/caching-policy",
+					map[string]any{"default-ttl-seconds": 300, "cache-control": "private"},
+				),
+			)
 		gw.Interface(fmt.Sprintf("gateway-%d-http", i), "HTTP").SetName("HTTP Interface").SetPort(80)
 		gw.Interface(fmt.Sprintf("order-client-%d", i), "REST")
 		gw.Interface(fmt.Sprintf("inventory-client-%d", i), "REST")
@@ -214,15 +218,13 @@ func addNodes(a *Architecture) {
 		AddMeta("runbook", "https://runbooks.example.com/order-service").
 		AddMeta("sla-tier", "tier-1").
 		AddMeta("tech-owner", "Order Team").
-		AddMeta("tier", "tier-1")
-	orderSvc.Control(
-		"circuit-breaker",
-		"Fault tolerance for downstream service calls",
-		NewRequirement(
-			"https://internal-policy.example.com/resilience/circuit-breaker-policy",
-			NewCircuitBreakerConfig(50, 30, 10),
-		),
-	)
+		AddMeta("tier", "tier-1").
+		Control("circuit-breaker", "Fault tolerance for downstream service calls",
+			NewRequirement(
+				"https://internal-policy.example.com/resilience/circuit-breaker-policy",
+				NewCircuitBreakerConfig(50, 30, 10),
+			),
+		)
 	orderSvc.Interface("order-api", "REST").SetName("Order API").SetPort(8080)
 	orderSvc.Interface("order-db-write-client", "JDBC").
 		SetName("Order DB Write Client").
