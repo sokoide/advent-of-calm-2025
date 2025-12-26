@@ -1,5 +1,9 @@
 {
     "$schema": "https://calm.finos.org/release/1.1/meta/calm.json",
+    "adrs": [
+        "docs/adr/0001-use-message-queue-for-async-processing.md",
+        "docs/adr/0002-use-oauth2-for-api-authentication.md"
+    ],
     "unique-id": "ecommerce-platform-architecture",
     "name": "E-Commerce Order Processing Platform",
     "description": "A complete architecture for an e-commerce order processing system.",
