@@ -19,6 +19,7 @@ This repository tracks my 24-day journey learning the Common Architecture Langua
 - [x] Day 13: Create custom documentation with Handlebars templates
 - [x] Day 14: AI-assisted resilience improvements - LB, replicas, message queue
 - [x] Day 15: Add operational metadata for support documentation
+- [x] Day 16: Generate operations documentation with docify templates
 
 ## Tools
 
