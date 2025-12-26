@@ -16,16 +16,16 @@ const (
 )
 
 type Architecture struct {
-	Schema        string               `json:"$schema"`
-	ADRs          []string             `json:"adrs,omitempty"`
-	UniqueID      string               `json:"unique-id"`
-	Name          string               `json:"name"`
-	Description   string               `json:"description"`
-	Metadata      map[string]any       `json:"metadata,omitempty"`
-	Controls      map[string]*Control  `json:"controls,omitempty"`
-	Flows         []*Flow              `json:"flows,omitempty"`
-	Nodes         []*Node              `json:"nodes"`
-	Relationships []*Relationship      `json:"relationships"`
+	Schema        string              `json:"$schema"`
+	ADRs          []string            `json:"adrs,omitempty"`
+	UniqueID      string              `json:"unique-id"`
+	Name          string              `json:"name"`
+	Description   string              `json:"description"`
+	Metadata      map[string]any      `json:"metadata,omitempty"`
+	Controls      map[string]*Control `json:"controls,omitempty"`
+	Flows         []*Flow             `json:"flows,omitempty"`
+	Nodes         []*Node             `json:"nodes"`
+	Relationships []*Relationship     `json:"relationships"`
 }
 
 type Metadata map[string]any

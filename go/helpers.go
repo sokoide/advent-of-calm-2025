@@ -17,6 +17,11 @@ func (a *Architecture) AddMeta(k string, v any) *Architecture {
 	return a
 }
 
+func (a *Architecture) Control(id string, desc string, reqs ...Requirement) *Architecture {
+	a.Controls[id] = &Control{Description: desc, Requirements: reqs}
+	return a
+}
+
 func (a *Architecture) Node(id string, ntype NodeType, name, desc string) *Node {
 	n := &Node{
 		UniqueID:    id,
@@ -54,12 +59,17 @@ func (n *Node) Control(id string, desc string, reqs ...Requirement) *Node {
 }
 
 // --- Interface Methods ---
-func (i *Interface) SetPort(p int) *Interface { i.Port = p; return i }
+func (i *Interface) SetPort(p int) *Interface    { i.Port = p; return i }
 func (i *Interface) SetHost(h string) *Interface { i.Host = h; return i }
 func (i *Interface) SetPath(p string) *Interface { i.Path = p; return i }
 func (i *Interface) SetName(n string) *Interface { i.Name = n; return i }
 func (i *Interface) SetDesc(d string) *Interface { i.Description = d; return i }
-func (i *Interface) SetDB(d string) *Interface { i.Database = d; return i }
+func (i *Interface) SetDB(d string) *Interface   { i.Database = d; return i }
+
+// --- Metadata ---
+func NewMetadata() Metadata {
+	return make(Metadata)
+}
 
 // --- Relationship ---
 func (a *Architecture) Interacts(id, desc, actor, node string) *Relationship {
@@ -173,5 +183,9 @@ func NewFailoverConfig(rto, rpo int, auto bool) map[string]any {
 }
 
 func NewCircuitBreakerConfig(threshold, wait, minCalls int) map[string]any {
-	return map[string]any{"failure-threshold-percentage": threshold, "wait-duration-seconds": wait, "minimum-calls-before-opening": minCalls}
+	return map[string]any{
+		"failure-threshold-percentage": threshold,
+		"wait-duration-seconds":        wait,
+		"minimum-calls-before-opening": minCalls,
+	}
 }
