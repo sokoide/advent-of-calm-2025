@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/standards/company-node-standard.json",
+  "title": "Company Node Standard",
+  "description": "Standard requirements for all nodes within the company's architectures.",
+  "type": "object",
+  "properties": {
+    "costCenter": {
+      "type": "string",
+      "description": "The financial cost center associated with this node. Must follow the pattern CC-####.",
+      "pattern": "^CC-\d{4}$"
+    },
+    "owner": {
+      "type": "string",
+      "description": "The team or individual primarily responsible for the maintenance of this node."
+    },
+    "environment": {
+      "type": "string",
+      "description": "The operational environment where this node is deployed.",
+      "enum": [
+        "development",
+        "staging",
+        "production"
+      ]
+    }
+  },
+  "required": [
+    "costCenter",
+    "owner"
+  ]
+}

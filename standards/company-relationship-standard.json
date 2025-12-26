@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/standards/company-relationship-standard.json",
+  "title": "Company Relationship Standard",
+  "description": "Standard requirements for all relationships within the company's architectures.",
+  "type": "object",
+  "properties": {
+    "dataClassification": {
+      "type": "string",
+      "description": "The sensitivity level of the data flowing across this connection.",
+      "enum": [
+        "public",
+        "internal",
+        "confidential",
+        "restricted"
+      ]
+    },
+    "encrypted": {
+      "type": "boolean",
+      "description": "Indicates whether the data in transit is encrypted using an approved protocol."
+    }
+  },
+  "required": [
+    "dataClassification",
+    "encrypted"
+  ]
+}
