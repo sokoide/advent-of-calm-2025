@@ -22,7 +22,7 @@ build:
 # フォーマット: golines で 120 文字制限を適用して整形
 format:
 	@command -v golines >/dev/null 2>&1 || (echo "golines が見つかりません。make setup を実行してください。" && exit 1)
-	golines -w -m 120 .
+	golines -w -m 120 --base-formatter gofmt .
 
 # 実行: JSON を標準出力に書き出し
 run:
