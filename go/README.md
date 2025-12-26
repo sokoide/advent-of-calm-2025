@@ -1,51 +1,27 @@
 # CALM Architecture Definition in Go
 
-このディレクトリには、CALM (Common Architecture Language Model) アーキテクチャを Go 言語で定義・生成するための高度な DSL (Domain Specific Language) 実装が含まれています。
+このディレクトリには、CALM アーキテクチャを Go で定義・生成するための DSL 実装が含まれています。
 
-## Go DSL 方式の主なメリット
+## DSL 命名規則 (Naming Conventions)
 
-巨大な JSON ファイルを直接編集する代わりに Go コードを使用することで、設計の品質と保守性が劇的に向上します。
+コードの読みやすさと「書き心地」を維持するため、以下のルールに従ってメソッドを命名しています。
 
-### 1. 宣言的な Fluent API
-
-`NewNode(...).WithInterfaces(...).WithControl(...)` といったメソッドチェーン（Fluent API）を採用しています。これにより、システムのトポロジーや制約を自然言語に近い形で、かつ極めて簡潔に記述できます。
-
-### 2. コンパイル時チェック（型安全）
-
-* **構造化された Config**: `SecurityConfig` や `CircuitBreakerConfig` などの専用構造体を使用するため、プロパティ名のタイポや型の不一致をコンパイル時に検出できます。
-* **列挙型の活用**: `NodeType` などの重要な識別子が定数化されており、無効な値の混入を未然に防ぎます。
-
-### 3. メタデータと共通設定の再利用
-
-* **Metadata ビルダー**: `NewMetadata().Add(key, value)` により、柔軟なメタデータ定義を IDE の補完を受けながら行えます。
-* **一括適用**: 共通の責任者情報や SLA 設定を変数化し、複数のノードやリレーションシップに一括して適用することが容易です（DRY 原則の徹底）。
-
-### 4. 運用ナレッジの統合
-
-障害モード (`failure-modes`) や監視リンク (`monitoring`) をコードの近くに定義することで、アーキテクチャ図を「単なる設計図」から「生きた運用仕様書」へと進化させることができます。
-
-### 5. 自動化されたワークフロー
-
-付属の `Makefile` により、フォーマット、ビルド、生成、そして CALM 仕様への適合チェック（バリデーション）をワンコマンドで実行可能です。
-
-## ファイル構成
-
-* `arch_dsl.go`: CALM 1.1 仕様に基づいたコア構造体定義。
-* `helpers.go`: Fluent API を実現するコンストラクタとビルダーメソッド。
-* `main.go`: アーキテクチャの具体的な定義（ビジネスロジック）。
-* `Makefile`: 開発サイクルの自動化コマンド。
+| 接頭辞 | 役割 | 説明 | 例 |
+| :--- | :--- | :--- | :--- |
+| **`New...`** | **独立した部品の生成** | 親が決まっていない単体の部品を作成します。 | `NewRequirement`, `NewSecurityConfig` |
+| **(なし/名詞)** | **工場 (Factory)** | 親オブジェクトから子を生成し、自動的に親のリストへ追加します。 | `arch.Node()`, `node.Interface()`, `arch.Flow()` |
+| **`Add...`** | **コレクションへの追加** | Metadata や Controls などのマップ/スライスへ要素を追加し、親を返します。 | `node.AddMeta()`, `node.AddControl()` |
+| **`Set...`** / **`With...`** | **属性の設定 (Fluent)** | オブジェクト自身のプロパティ値を設定・変更し、自身を返します。 | `intf.SetPort()`, `rel.WithProtocol()` |
 
 ## 使用方法
 
-ソースコードの整形からバリデーションまでを自動で行います：
-
 ```bash
-# コードの整形
+# フォーマット (120文字制限適用)
 make -C go format
 
-# アーキテクチャの生成とバリデーション
+# バリデーション
 make -C go validate
 
-# 特定のファイルに出力する場合
-go run go/*.go > architectures/ecommerce-platform.json
+# オリジナル JSON との比較
+make -C go diff
 ```

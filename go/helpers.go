@@ -17,7 +17,7 @@ func (a *Architecture) AddMeta(k string, v any) *Architecture {
 	return a
 }
 
-func (a *Architecture) Control(id string, desc string, reqs ...Requirement) *Architecture {
+func (a *Architecture) AddControl(id string, desc string, reqs ...Requirement) *Architecture {
 	a.Controls[id] = &Control{Description: desc, Requirements: reqs}
 	return a
 }
@@ -53,7 +53,7 @@ func (n *Node) AddMeta(k string, v any) *Node {
 	return n
 }
 
-func (n *Node) Control(id string, desc string, reqs ...Requirement) *Node {
+func (n *Node) AddControl(id string, desc string, reqs ...Requirement) *Node {
 	n.Controls[id] = &Control{Description: desc, Requirements: reqs}
 	return n
 }
