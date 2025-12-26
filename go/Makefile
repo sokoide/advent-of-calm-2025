@@ -27,6 +27,14 @@ validate:
 	calm validate -a generated-arch.json
 	@rm generated-arch.json
 
+# 比較: 既存の ecommerce-platform.json との差分を確認
+diff:
+	@jq -S . ../architectures/ecommerce-platform.json > /tmp/expected.json
+	@go run . > /tmp/raw_actual.json
+	@jq -S . /tmp/raw_actual.json > /tmp/actual.json
+	diff -u /tmp/expected.json /tmp/actual.json || true
+	@rm /tmp/expected.json /tmp/actual.json /tmp/raw_actual.json
+
 # クリーンアップ: 生成物を削除
 clean:
 	rm -f ../arch-gen generated-arch.json
