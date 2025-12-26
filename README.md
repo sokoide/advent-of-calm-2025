@@ -11,6 +11,7 @@ This repository tracks my 24-day journey learning the Common Architecture Langua
 - [x] Day 5: Add Interfaces to Nodes
 - [x] Day 6: Document with Metadata
 - [x] Day 7: Build Complete E-Commerce Architecture
+- [x] Day 8: Add security and performance controls for NFRs
 
 ## Tools
 

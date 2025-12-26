@@ -10,6 +10,40 @@
         "description": "E-commerce order processing platform architecture demo.",
         "tags": ["ecommerce", "microservices", "orders"]
     },
+    "controls": {
+        "security": {
+            "description": "Data encryption and secure communication requirements",
+            "requirements": [
+                {
+                    "requirement-url": "https://internal-policy.example.com/security/encryption-at-rest",
+                    "config": {
+                        "algorithm": "AES-256",
+                        "scope": "all-data-stores"
+                    }
+                },
+                {
+                    "requirement-url": "https://internal-policy.example.com/security/tls-1-3-minimum",
+                    "config-url": "https://configs.example.com/security/tls-config.yaml"
+                }
+            ]
+        },
+        "performance": {
+            "description": "System-wide performance and scalability requirements",
+            "requirements": [
+                {
+                    "requirement-url": "https://internal-policy.example.com/performance/response-time-sla",
+                    "config": {
+                        "p99-latency-ms": 200,
+                        "p95-latency-ms": 100
+                    }
+                },
+                {
+                    "requirement-url": "https://internal-policy.example.com/performance/availability-target",
+                    "config-url": "https://configs.example.com/infra/ha-config.yaml"
+                }
+            ]
+        }
+    },
     "nodes": [
         {
             "unique-id": "customer",
@@ -39,6 +73,24 @@
                 "repository": "https://github.com/example/api-gateway",
                 "deployment-type": "container",
                 "business-criticality": "high"
+            },
+            "controls": {
+                "performance": {
+                    "description": "API Gateway rate limiting and caching requirements",
+                    "requirements": [
+                        {
+                            "requirement-url": "https://internal-policy.example.com/performance/rate-limiting",
+                            "config-url": "https://configs.example.com/gateway/rate-limits.yaml"
+                        },
+                        {
+                            "requirement-url": "https://internal-policy.example.com/performance/caching-policy",
+                            "config": {
+                                "default-ttl-seconds": 300,
+                                "cache-control": "private"
+                            }
+                        }
+                    ]
+                }
             },
             "interfaces": [
                 {
@@ -147,6 +199,17 @@
                 "repository": "https://github.com/example/payment-service",
                 "deployment-type": "serverless",
                 "business-criticality": "high"
+            },
+            "controls": {
+                "compliance": {
+                    "description": "PCI-DSS compliance for payment processing",
+                    "requirements": [
+                        {
+                            "requirement-url": "https://www.pcisecuritystandards.org/documents/PCI-DSS-v4.0",
+                            "config-url": "https://configs.example.com/compliance/pci-dss-config.json"
+                        }
+                    ]
+                }
             },
             "interfaces": [
                 {
