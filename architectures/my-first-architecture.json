@@ -3,6 +3,13 @@
     "unique-id": "my-payment-system-architecture",
     "name": "My Payment System Architecture",
     "description": "An architecture representing a payment processing system and its internal components.",
+    "metadata": {
+        "owner": "Architecture Team",
+        "version": "1.0.0",
+        "created": "2025-12-26",
+        "description": "Metadata for the payment system architecture demo.",
+        "tags": ["learning", "authentication", "demo"]
+    },
     "nodes": [
         {
             "unique-id": "end-user",
@@ -21,6 +28,12 @@
             "node-type": "service",
             "name": "Payment Processing Service",
             "description": "A service that handles credit card transactions.",
+            "metadata": {
+                "tech-owner": "Payment Core Team",
+                "repository": "https://github.com/example/payment-processing-service",
+                "deployment-type": "container",
+                "sla-tier": "tier-1"
+            },
             "interfaces": [
                 {
                     "unique-id": "payment-api-https",
@@ -78,6 +91,11 @@
         {
             "unique-id": "service-to-db",
             "description": "Payment service persists transactions to the database.",
+            "metadata": {
+                "latency-sla": "< 100ms",
+                "monitoring": true,
+                "circuit-breaker": false
+            },
             "relationship-type": {
                 "connects": {
                     "source": {
