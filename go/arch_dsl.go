@@ -59,8 +59,8 @@ type AvailabilityConfig struct {
 }
 
 type FailoverConfig struct {
-	RTOMinutes       int  `json:"rto-minutes,omitempty"`
-	RPOMinutes       int  `json:"rpo-minutes,omitempty"`
+	RTOMinutes        int  `json:"rto-minutes,omitempty"`
+	RPOMinutes        int  `json:"rpo-minutes,omitempty"`
 	AutomaticFailover bool `json:"automatic-failover,omitempty"`
 }
 
@@ -72,11 +72,11 @@ type CircuitBreakerConfig struct {
 
 // --- Flows & Nodes ---
 type Flow struct {
-	UniqueID    string         `json:"unique-id"`
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	Metadata    Metadata       `json:"metadata,omitempty"`
-	Transitions []Transition   `json:"transitions"`
+	UniqueID    string       `json:"unique-id"`
+	Name        string       `json:"name"`
+	Description string       `json:"description"`
+	Metadata    Metadata     `json:"metadata,omitempty"`
+	Transitions []Transition `json:"transitions"`
 }
 
 type Transition struct {

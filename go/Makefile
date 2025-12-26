@@ -1,25 +1,32 @@
-.PHONY: build format run validate clean help
+.PHONY: build format run validate diff clean help setup
 
 # デフォルトターゲット
 help:
 	@echo "利用可能なコマンド:"
+	@echo "  make setup    - 必要なツール (golines) をインストールします"
 	@echo "  make build    - Go プログラムをビルドして実行ファイルを生成します"
-	@echo "  make format   - gofmt を使用してソースコードを整形します"
+	@echo "  make format   - golines を使用してソースコードを整形します (120文字制限)"
 	@echo "  make run      - プログラムを実行してアーキテクチャ JSON を出力します"
 	@echo "  make validate - アーキテクチャを生成し、CALM バリデーションを実行します"
+	@echo "  make diff     - 既存の ecommerce-platform.json との差分を確認します"
 	@echo "  make clean    - 生成されたバイナリや一時ファイルを削除します"
+
+# セットアップ: 必要なツールをインストール
+setup:
+	go install github.com/segmentio/golines@latest
 
 # ビルド: 実行ファイルを生成
 build:
 	go build -o ../arch-gen .
 
-# フォーマット: gofmt でコードを整形
+# フォーマット: golines で 120 文字制限を適用して整形
 format:
-	gofmt -w .
+	@command -v golines >/dev/null 2>&1 || (echo "golines が見つかりません。make setup を実行してください。" && exit 1)
+	golines -w -m 120 .
 
 # 実行: JSON を標準出力に書き出し
 run:
-	go run .
+	@go run .
 
 # バリデーション: JSON を生成して calm validate を実行
 validate:

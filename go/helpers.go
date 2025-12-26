@@ -52,12 +52,12 @@ func NewInterface(id, protocol string) Interface {
 	return Interface{UniqueID: id, Protocol: protocol}
 }
 
-func (i Interface) AtPort(p int) Interface { i.Port = p; return i }
-func (i Interface) OnHost(h string) Interface { i.Host = h; return i }
+func (i Interface) AtPort(p int) Interface      { i.Port = p; return i }
+func (i Interface) OnHost(h string) Interface   { i.Host = h; return i }
 func (i Interface) WithPath(p string) Interface { i.Path = p; return i }
 func (i Interface) WithName(n string) Interface { i.Name = n; return i }
 func (i Interface) WithDesc(d string) Interface { i.Description = d; return i }
-func (i Interface) WithDB(d string) Interface { i.Database = d; return i }
+func (i Interface) WithDB(d string) Interface   { i.Database = d; return i }
 
 // --- Metadata ---
 func NewMetadata() Metadata {
@@ -161,7 +161,11 @@ func NewFailoverConfig(rto, rpo int, auto bool) FailoverConfig {
 }
 
 func NewCircuitBreakerConfig(threshold, wait, minCalls int) CircuitBreakerConfig {
-	return CircuitBreakerConfig{FailureThresholdPercentage: threshold, WaitDurationSeconds: wait, MinimumCallsBeforeOpening: minCalls}
+	return CircuitBreakerConfig{
+		FailureThresholdPercentage: threshold,
+		WaitDurationSeconds:        wait,
+		MinimumCallsBeforeOpening:  minCalls,
+	}
 }
 
 func BoolPtr(b bool) *bool { return &b }
