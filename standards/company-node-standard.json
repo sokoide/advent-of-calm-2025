@@ -8,7 +8,7 @@
     "costCenter": {
       "type": "string",
       "description": "The financial cost center associated with this node. Must follow the pattern CC-####.",
-      "pattern": "^CC-\d{4}$"
+      "pattern": "^CC-\\d{4}$"
     },
     "owner": {
       "type": "string",

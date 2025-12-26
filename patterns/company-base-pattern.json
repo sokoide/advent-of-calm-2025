@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/patterns/company-base-pattern.json",
+  "title": "Company Base Pattern",
+  "description": "Base pattern that enforces organizational standards for all nodes and relationships within an architecture, without restricting the overall topology.",
+  "type": "object",
+  "properties": {
+    "nodes": {
+      "type": "array",
+      "items": {
+        "$ref": "https://example.com/standards/company-node-standard.json"
+      }
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "$ref": "https://example.com/standards/company-relationship-standard.json"
+      }
+    }
+  },
+  "required": ["nodes", "relationships"]
+}

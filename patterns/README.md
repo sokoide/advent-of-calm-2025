@@ -26,16 +26,35 @@ calm validate -p patterns/web-app-pattern.json -a architectures/generated-webapp
 ```
 
 ## 3. パターンによる強制事項
-このパターンは以下の構造を厳格に要求します：
-*   **ノード (計3つ)**:
-    1.  `web-frontend` (node-type: webclient)
-    2.  `api-service` (node-type: service)
-    3.  `app-database` (node-type: database)
-*   **リレーションシップ (計2つ)**:
-    1.  `frontend-to-api`: Frontend から API への接続
-    2.  `api-to-database`: API から Database への接続
+このディレクトリには、性質の異なる2つのパターンが含まれています。
 
-## 4. カスタマイズ可能な柔軟性
+### Web アプリケーションパターン (`web-app-pattern.json`) - **構造の強制**
+このパターンは、システムの「トポロジー（形）」を定義します。
+*   **強制事項**: 特定の名前と型を持つ 3つのノードと、それらの間の特定の接続。
+*   **用途**: 標準的な 3層構造の Web アプリを迅速に立ち上げ、その形を維持したい場合。
+
+### 会社基本パターン (`company-base-pattern.json`) - **品質（標準）の強制**
+このパターンは、個別の構成には干渉せず、存在するすべての要素が組織の「ガバナンス基準」を満たしているかをチェックします。
+*   **強制事項**: ノード数に関わらず、すべてのノードに `costCenter` / `owner` があり、すべての接続に `dataClassification` / `encrypted` が定義されていること。
+*   **用途**: あらゆる種類のアーキテクチャに対して、組織としての最低限の品質基準を横断的に適用したい場合。
+
+## 4. どちらのパターンを使うべきか
+| 目的 | 推奨パターン |
+| :--- | :--- |
+| 新しい 3-tier アプリの雛形を作りたい | `web-app-pattern.json` |
+| 既存の（形がバラバラな）設計が会社のルールを守っているか確認したい | `company-base-pattern.json` |
+| 両方を守らせたい | 両方のパターンで個別に `validate` を実行します。 |
+
+## 5. 組織標準によるバリデーションの実行
+外部参照される Standards ファイルをローカルファイルにマッピングするため、`-u` (URL mapping) フラグを併用します。
+
+```bash
+calm validate -p patterns/company-base-pattern.json \
+              -a architectures/ecommerce-platform.json \
+              -u url-mapping.json
+```
+
+## 6. カスタマイズ可能な柔軟性
 パターンの制約を満たした上で、以下の項目は自由に拡張可能です：
 *   **詳細説明**: 各ノードやリレーションシップの `description`
 *   **インターフェース**: ホスト名、ポート、プロトコルの詳細設定

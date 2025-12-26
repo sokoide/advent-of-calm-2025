@@ -161,25 +161,33 @@
             "unique-id": "customer",
             "node-type": "actor",
             "name": "Customer",
-            "description": "A user who browses and purchases products."
+            "description": "A user who browses and purchases products.",
+            "costCenter": "CC-1000",
+            "owner": "marketing-team"
         },
         {
             "unique-id": "admin",
             "node-type": "actor",
             "name": "Admin",
-            "description": "A staff member who manages products and orders."
+            "description": "A staff member who manages products and orders.",
+            "costCenter": "CC-1000",
+            "owner": "ops-team"
         },
         {
             "unique-id": "ecommerce-system",
             "node-type": "system",
             "name": "E-Commerce Platform",
-            "description": "The overall e-commerce system containing microservices."
+            "description": "The overall e-commerce system containing microservices.",
+            "costCenter": "CC-2000",
+            "owner": "platform-team"
         },
         {
             "unique-id": "load-balancer",
             "node-type": "service",
             "name": "Load Balancer",
             "description": "High-availability entry point that distributes traffic to API Gateways.",
+            "costCenter": "CC-2000",
+            "owner": "platform-team",
             "metadata": {
                 "tech-owner": "Network Team",
                 "owner": "platform-team",
@@ -215,6 +223,8 @@
             "node-type": "service",
             "name": "API Gateway Instance 1",
             "description": "Primary API Gateway instance.",
+            "costCenter": "CC-2000",
+            "owner": "platform-team",
             "metadata": {
                 "tech-owner": "Edge Team",
                 "owner": "platform-team",
@@ -276,6 +286,8 @@
             "node-type": "service",
             "name": "API Gateway Instance 2",
             "description": "Secondary API Gateway instance for high availability.",
+            "costCenter": "CC-2000",
+            "owner": "platform-team",
             "metadata": {
                 "tech-owner": "Edge Team",
                 "owner": "platform-team",
@@ -337,6 +349,8 @@
             "node-type": "service",
             "name": "Order Service",
             "description": "Handles order creation and lifecycle management.",
+            "costCenter": "CC-3000",
+            "owner": "orders-team",
             "metadata": {
                 "tech-owner": "Order Team",
                 "owner": "orders-team",
@@ -433,6 +447,8 @@
             "node-type": "service",
             "name": "Inventory Service",
             "description": "Manages product stock levels.",
+            "costCenter": "CC-4000",
+            "owner": "inventory-team",
             "metadata": {
                 "tech-owner": "Warehouse Team",
                 "owner": "inventory-team",
@@ -488,6 +504,8 @@
             "node-type": "service",
             "name": "Payment Service",
             "description": "Integrates with external payment providers.",
+            "costCenter": "CC-5000",
+            "owner": "payments-team",
             "metadata": {
                 "tech-owner": "Payment Team",
                 "owner": "payments-team",
@@ -555,6 +573,8 @@
             "node-type": "system",
             "name": "Message Broker (RabbitMQ)",
             "description": "Central messaging system for failure isolation and async processing.",
+            "costCenter": "CC-2000",
+            "owner": "platform-team",
             "metadata": {
                 "tech-owner": "Platform Team",
                 "owner": "platform-team",
@@ -580,13 +600,17 @@
             "unique-id": "order-queue",
             "node-type": "queue",
             "name": "Order Payment Queue",
-            "description": "Buffer for orders awaiting payment processing."
+            "description": "Buffer for orders awaiting payment processing.",
+            "costCenter": "CC-3000",
+            "owner": "orders-team"
         },
         {
             "unique-id": "order-database-cluster",
             "node-type": "system",
             "name": "Order Database Cluster",
             "description": "High-availability database cluster for order data.",
+            "costCenter": "CC-3000",
+            "owner": "dba-team",
             "controls": {
                 "failover": {
                     "description": "Disaster recovery and failover targets",
@@ -608,6 +632,8 @@
             "node-type": "database",
             "name": "Order Database (Primary)",
             "description": "Main writable database for orders.",
+            "costCenter": "CC-3000",
+            "owner": "dba-team",
             "metadata": {
                 "tech-owner": "DBA Team",
                 "backup-schedule": "daily at 02:00 UTC",
@@ -633,6 +659,8 @@
             "node-type": "database",
             "name": "Order Database (Replica)",
             "description": "Read-only replica for scaling read operations.",
+            "costCenter": "CC-3000",
+            "owner": "dba-team",
             "metadata": {
                 "tech-owner": "DBA Team",
                 "backup-schedule": "daily at 02:00 UTC",
@@ -658,6 +686,8 @@
             "node-type": "database",
             "name": "Inventory Database",
             "description": "Stores stock levels.",
+            "costCenter": "CC-4000",
+            "owner": "dba-team",
             "metadata": {
                 "tech-owner": "DBA Team",
                 "backup-schedule": "weekly at Sunday 03:00 UTC",
@@ -680,6 +710,8 @@
         {
             "unique-id": "customer-interacts-lb",
             "description": "Customer accesses the platform via Load Balancer.",
+            "dataClassification": "public",
+            "encrypted": true,
             "relationship-type": {
                 "interacts": {
                     "actor": "customer",
@@ -690,6 +722,8 @@
         {
             "unique-id": "admin-interacts-lb",
             "description": "Admin manages the platform via Load Balancer.",
+            "dataClassification": "internal",
+            "encrypted": true,
             "relationship-type": {
                 "interacts": {
                     "actor": "admin",
@@ -700,6 +734,8 @@
         {
             "unique-id": "lb-connects-gateway-1",
             "description": "Load Balancer distributes traffic to Gateway Instance 1.",
+            "dataClassification": "internal",
+            "encrypted": true,
             "relationship-type": {
                 "connects": {
                     "source": { "node": "load-balancer", "interfaces": ["lb-to-gateway"] },
@@ -710,6 +746,8 @@
         {
             "unique-id": "lb-connects-gateway-2",
             "description": "Load Balancer distributes traffic to Gateway Instance 2.",
+            "dataClassification": "internal",
+            "encrypted": true,
             "relationship-type": {
                 "connects": {
                     "source": { "node": "load-balancer", "interfaces": ["lb-to-gateway"] },
@@ -720,6 +758,8 @@
         {
             "unique-id": "gateway-1-connects-order",
             "description": "Gateway 1 forwards requests to Order Service.",
+            "dataClassification": "internal",
+            "encrypted": true,
             "relationship-type": {
                 "connects": {
                     "source": { "node": "api-gateway-1", "interfaces": ["order-client-1"] },
@@ -730,6 +770,8 @@
         {
             "unique-id": "gateway-2-connects-order",
             "description": "Gateway 2 forwards requests to Order Service.",
+            "dataClassification": "internal",
+            "encrypted": true,
             "relationship-type": {
                 "connects": {
                     "source": { "node": "api-gateway-2", "interfaces": ["order-client-2"] },
@@ -740,6 +782,8 @@
         {
             "unique-id": "gateway-1-connects-inventory",
             "description": "Gateway 1 forwards requests to Inventory Service.",
+            "dataClassification": "internal",
+            "encrypted": true,
             "relationship-type": {
                 "connects": {
                     "source": { "node": "api-gateway-1", "interfaces": ["inventory-client-1"] },
@@ -750,6 +794,8 @@
         {
             "unique-id": "gateway-2-connects-inventory",
             "description": "Gateway 2 forwards requests to Inventory Service.",
+            "dataClassification": "internal",
+            "encrypted": true,
             "relationship-type": {
                 "connects": {
                     "source": { "node": "api-gateway-2", "interfaces": ["inventory-client-2"] },
@@ -760,6 +806,8 @@
         {
             "unique-id": "order-connects-primary-db",
             "description": "Order Service persists data to Primary Order Database.",
+            "dataClassification": "confidential",
+            "encrypted": true,
             "metadata": {
                 "monitoring": true
             },
@@ -773,6 +821,8 @@
         {
             "unique-id": "order-publishes-to-queue",
             "description": "Order Service publishes payment task to queue.",
+            "dataClassification": "internal",
+            "encrypted": true,
             "protocol": "AMQP",
             "relationship-type": {
                 "connects": {
@@ -784,6 +834,8 @@
         {
             "unique-id": "payment-subscribes-to-queue",
             "description": "Payment Service consumes payment task from queue.",
+            "dataClassification": "internal",
+            "encrypted": true,
             "protocol": "AMQP",
             "relationship-type": {
                 "connects": {
@@ -795,6 +847,8 @@
         {
             "unique-id": "order-connects-replica-db",
             "description": "Order Service reads data from Replica Order Database.",
+            "dataClassification": "confidential",
+            "encrypted": true,
             "metadata": {
                 "monitoring": true
             },
@@ -808,6 +862,8 @@
         {
             "unique-id": "order-connects-inventory",
             "description": "Order Service checks/reserves stock in Inventory Service.",
+            "dataClassification": "internal",
+            "encrypted": true,
             "metadata": {
                 "latency-sla": "< 100ms",
                 "monitoring": true,
@@ -823,6 +879,8 @@
         {
             "unique-id": "inventory-connects-db",
             "description": "Inventory Service manages stock in Inventory Database.",
+            "dataClassification": "internal",
+            "encrypted": true,
             "metadata": {
                 "monitoring": true
             },
@@ -836,6 +894,8 @@
         {
             "unique-id": "broker-composition",
             "description": "Message broker contains the order queue.",
+            "dataClassification": "internal",
+            "encrypted": false,
             "relationship-type": {
                 "composed-of": {
                     "container": "message-broker",
@@ -846,6 +906,8 @@
         {
             "unique-id": "order-db-composition",
             "description": "Primary and replica databases form the order database cluster.",
+            "dataClassification": "confidential",
+            "encrypted": true,
             "relationship-type": {
                 "composed-of": {
                     "container": "order-database-cluster",
@@ -859,6 +921,8 @@
         {
             "unique-id": "ecommerce-system-composition",
             "description": "The E-Commerce Platform comprises its core services and databases.",
+            "dataClassification": "internal",
+            "encrypted": false,
             "relationship-type": {
                 "composed-of": {
                     "container": "ecommerce-system",
