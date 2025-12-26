@@ -12,7 +12,15 @@
         "version": "1.0.0",
         "created": "2025-12-26",
         "description": "E-commerce order processing platform architecture demo.",
-        "tags": ["ecommerce", "microservices", "orders"]
+        "tags": ["ecommerce", "microservices", "orders"],
+        "monitoring": {
+            "grafana-dashboard": "https://grafana.example.com/d/ecommerce-overview",
+            "kibana-logs": "https://kibana.example.com/app/discover#/ecommerce-*",
+            "pagerduty-service": "https://pagerduty.example.com/services/ECOMMERCE",
+            "statuspage": "https://status.example.com",
+            "metrics-retention": "30 days",
+            "log-retention": "90 days"
+        }
     },
     "controls": {
         "security": {
@@ -65,6 +73,12 @@
             "unique-id": "order-processing-flow",
             "name": "Customer Order Processing",
             "description": "End-to-end flow from customer placing an order to payment confirmation",
+            "metadata": {
+                "business-impact": "Customers cannot complete purchases - direct revenue loss",
+                "degraded-behavior": "Orders queue in message broker; processed when service recovers",
+                "customer-communication": "Display 'Order processing delayed' message",
+                "sla": "99.9% availability, 30s p99 latency"
+            },
             "transitions": [
                 {
                     "relationship-unique-id": "customer-interacts-lb",
@@ -102,6 +116,12 @@
             "unique-id": "inventory-check-flow",
             "name": "Inventory Stock Check",
             "description": "Admin checks and updates inventory stock levels",
+            "metadata": {
+                "business-impact": "Stock levels may be inaccurate - risk of overselling",
+                "degraded-behavior": "Fall back to cached inventory; flag orders for manual review",
+                "customer-communication": "Display 'Stock availability being confirmed'",
+                "sla": "99.5% availability, 500ms p99 latency"
+            },
             "transitions": [
                 {
                     "relationship-unique-id": "admin-interacts-lb",
@@ -162,6 +182,15 @@
             "description": "High-availability entry point that distributes traffic to API Gateways.",
             "metadata": {
                 "tech-owner": "Network Team",
+                "owner": "platform-team",
+                "oncall-slack": "#oncall-platform",
+                "health-endpoint": "/status",
+                "runbook": "https://runbooks.example.com/load-balancer",
+                "tier": "tier-1",
+                "dependencies": ["api-gateway-1", "api-gateway-2"],
+                "dashboard": "https://grafana.example.com/d/lb-metrics",
+                "log-query": "service:load-balancer AND error",
+                "alerts": ["LB-HighLatency", "LB-TargetGroupUnhealthy"],
                 "deployment-type": "managed-service",
                 "business-criticality": "high",
                 "ha-enabled": true
@@ -188,6 +217,15 @@
             "description": "Primary API Gateway instance.",
             "metadata": {
                 "tech-owner": "Edge Team",
+                "owner": "platform-team",
+                "oncall-slack": "#oncall-platform",
+                "health-endpoint": "/health",
+                "runbook": "https://runbooks.example.com/api-gateway",
+                "tier": "tier-1",
+                "dependencies": ["order-service", "inventory-service"],
+                "dashboard": "https://grafana.example.com/d/gateway-overview",
+                "log-query": "service:api-gateway AND instance:1",
+                "alerts": ["Gateway-5xx-Rate", "Gateway-HighLatency"],
                 "repository": "https://github.com/example/api-gateway",
                 "deployment-type": "container",
                 "business-criticality": "high"
@@ -240,6 +278,15 @@
             "description": "Secondary API Gateway instance for high availability.",
             "metadata": {
                 "tech-owner": "Edge Team",
+                "owner": "platform-team",
+                "oncall-slack": "#oncall-platform",
+                "health-endpoint": "/health",
+                "runbook": "https://runbooks.example.com/api-gateway",
+                "tier": "tier-1",
+                "dependencies": ["order-service", "inventory-service"],
+                "dashboard": "https://grafana.example.com/d/gateway-overview",
+                "log-query": "service:api-gateway AND instance:2",
+                "alerts": ["Gateway-5xx-Rate", "Gateway-HighLatency"],
                 "repository": "https://github.com/example/api-gateway",
                 "deployment-type": "container",
                 "business-criticality": "high"
@@ -292,10 +339,42 @@
             "description": "Handles order creation and lifecycle management.",
             "metadata": {
                 "tech-owner": "Order Team",
+                "owner": "orders-team",
+                "oncall-slack": "#oncall-orders",
+                "health-endpoint": "/actuator/health",
+                "runbook": "https://runbooks.example.com/order-service",
+                "tier": "tier-1",
+                "dependencies": ["order-database-cluster", "inventory-service", "message-broker"],
+                "dashboard": "https://grafana.example.com/d/order-service-metrics",
+                "log-query": "app:order-service AND level:ERROR",
+                "alerts": ["OrderCreationFailureRate", "OrderDBConectionExhausted"],
                 "repository": "https://github.com/example/order-service",
                 "deployment-type": "container",
                 "sla-tier": "tier-1",
-                "business-criticality": "high"
+                "business-criticality": "high",
+                "failure-modes": [
+                    {
+                        "symptom": "HTTP 503 errors",
+                        "likely-cause": "Database connection pool exhausted",
+                        "check": "Check connection pool metrics in Grafana dashboard",
+                        "remediation": "Scale up service replicas or increase pool size",
+                        "escalation": "If persists > 5min, page DBA team"
+                    },
+                    {
+                        "symptom": "High latency (>2s p99)",
+                        "likely-cause": "Payment service degradation",
+                        "check": "Check payment-service health and circuit breaker status",
+                        "remediation": "Circuit breaker should open automatically; check fallback queue",
+                        "escalation": "Contact payments-team if circuit breaker not triggering"
+                    },
+                    {
+                        "symptom": "Order validation failures",
+                        "likely-cause": "Inventory service returning stale data",
+                        "check": "Verify inventory-service cache TTL and database replication lag",
+                        "remediation": "Clear inventory cache; check replica sync status",
+                        "escalation": "Contact platform-team for cache issues"
+                    }
+                ]
             },
             "controls": {
                 "circuit-breaker": {
@@ -356,9 +435,34 @@
             "description": "Manages product stock levels.",
             "metadata": {
                 "tech-owner": "Warehouse Team",
+                "owner": "inventory-team",
+                "oncall-slack": "#oncall-inventory",
+                "health-endpoint": "/health",
+                "runbook": "https://runbooks.example.com/inventory-service",
+                "tier": "tier-2",
+                "dependencies": ["inventory-db"],
+                "dashboard": "https://grafana.example.com/d/inventory-metrics",
+                "log-query": "app:inventory-service",
+                "alerts": ["InventoryCacheInconsistency", "StockUpdateFailure"],
                 "repository": "https://github.com/example/inventory-service",
                 "deployment-type": "container",
-                "business-criticality": "high"
+                "business-criticality": "high",
+                "failure-modes": [
+                    {
+                        "symptom": "Inventory sync failures",
+                        "likely-cause": "Deadlock on stock updates",
+                        "check": "Check DB lock metrics and slow query log",
+                        "remediation": "Review transaction isolation level or retry logic",
+                        "escalation": "Contact DBA team for lock contention"
+                    },
+                    {
+                        "symptom": "Stale stock levels",
+                        "likely-cause": "Cache invalidation failure",
+                        "check": "Verify Redis/Memcached availability and evictions",
+                        "remediation": "Flush cache for affected products",
+                        "escalation": "Contact platform-team for cache infrastructure"
+                    }
+                ]
             },
             "interfaces": [
                 {
@@ -386,9 +490,34 @@
             "description": "Integrates with external payment providers.",
             "metadata": {
                 "tech-owner": "Payment Team",
+                "owner": "payments-team",
+                "oncall-slack": "#oncall-payments",
+                "health-endpoint": "/health",
+                "runbook": "https://runbooks.example.com/payment-service",
+                "tier": "tier-1",
+                "dependencies": ["external-payment-provider"],
+                "dashboard": "https://grafana.example.com/d/payment-metrics",
+                "log-query": "app:payment-service",
+                "alerts": ["PaymentGatewayTimeout", "PCIViolationAttempt"],
                 "repository": "https://github.com/example/payment-service",
                 "deployment-type": "serverless",
-                "business-criticality": "high"
+                "business-criticality": "high",
+                "failure-modes": [
+                    {
+                        "symptom": "Payment processing timeouts",
+                        "likely-cause": "External payment gateway latency",
+                        "check": "Verify external gateway status page",
+                        "remediation": "Enable aggressive retry for idempotent calls",
+                        "escalation": "Escalate to provider support"
+                    },
+                    {
+                        "symptom": "Unauthorized transaction spikes",
+                        "likely-cause": "API Key leaked or compromised",
+                        "check": "Review access logs for unusual patterns",
+                        "remediation": "Rotate API keys immediately",
+                        "escalation": "Contact security-team"
+                    }
+                ]
             },
             "controls": {
                 "compliance": {
@@ -428,6 +557,14 @@
             "description": "Central messaging system for failure isolation and async processing.",
             "metadata": {
                 "tech-owner": "Platform Team",
+                "owner": "platform-team",
+                "oncall-slack": "#oncall-platform",
+                "health-endpoint": "/health",
+                "runbook": "https://runbooks.example.com/rabbitmq",
+                "tier": "tier-1",
+                "dashboard": "https://grafana.example.com/d/rabbitmq-overview",
+                "log-query": "service:rabbitmq",
+                "alerts": ["RabbitMQQueueSizeHigh", "RabbitMQConsumerDown"],
                 "deployment-type": "managed-service",
                 "adr": "docs/adr/0001-use-message-queue-for-async-processing.md"
             },
@@ -473,6 +610,9 @@
             "description": "Main writable database for orders.",
             "metadata": {
                 "tech-owner": "DBA Team",
+                "backup-schedule": "daily at 02:00 UTC",
+                "restore-time": "60 minutes",
+                "dba-contact": "dba-team@example.com",
                 "deployment-type": "managed-service",
                 "data-classification": "PII",
                 "role": "primary",
@@ -495,6 +635,9 @@
             "description": "Read-only replica for scaling read operations.",
             "metadata": {
                 "tech-owner": "DBA Team",
+                "backup-schedule": "daily at 02:00 UTC",
+                "restore-time": "60 minutes",
+                "dba-contact": "dba-team@example.com",
                 "deployment-type": "managed-service",
                 "data-classification": "PII",
                 "role": "replica",
@@ -517,6 +660,9 @@
             "description": "Stores stock levels.",
             "metadata": {
                 "tech-owner": "DBA Team",
+                "backup-schedule": "weekly at Sunday 03:00 UTC",
+                "restore-time": "30 minutes",
+                "dba-contact": "dba-team@example.com",
                 "deployment-type": "managed-service"
             },
             "interfaces": [
