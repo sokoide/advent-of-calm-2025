@@ -16,6 +16,7 @@ This repository tracks my 24-day journey learning the Common Architecture Langua
 - [x] Day 10: Link ADRs to architecture for decision traceability
 - [x] Day 11: Generate shareable documentation website
 - [x] Day 12: Create custom docs with calm-widgets
+- [x] Day 13: Create custom documentation with Handlebars templates
 
 ## Tools
 
