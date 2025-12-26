@@ -6,7 +6,7 @@ This repository tracks my 24-day journey learning the Common Architecture Langua
 
 -   [x] Day 1: Install CALM CLI and Initialize Repository
 -   [x] Day 2: Create Your First Node
--   [ ] Day 3: TBD
+-   [x] Day 3: Connect Nodes with Relationships
         ...
 
 ## Architectures

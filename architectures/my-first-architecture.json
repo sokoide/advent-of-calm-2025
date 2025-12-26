@@ -1,14 +1,20 @@
 {
     "$schema": "https://calm.finos.org/release/1.1/meta/calm.json",
-    "unique-id": "my-payment-system",
-    "name": "My Payment System",
-    "description": "An architecture representing a payment processing system.",
+    "unique-id": "my-payment-system-architecture",
+    "name": "My Payment System Architecture",
+    "description": "An architecture representing a payment processing system and its internal components.",
     "nodes": [
         {
-            "unique-id": "customer",
+            "unique-id": "end-user",
             "node-type": "actor",
-            "name": "Customer",
-            "description": "Individual performing a credit card transaction."
+            "name": "End User",
+            "description": "An end user or customer who uses the payment service to perform transactions."
+        },
+        {
+            "unique-id": "payment-system",
+            "node-type": "system",
+            "name": "Payment System",
+            "description": "The overall payment processing system."
         },
         {
             "unique-id": "payment-processing-service",
@@ -28,16 +34,24 @@
             "unique-id": "transaction-db",
             "node-type": "database",
             "name": "Transaction Database",
-            "description": "Stores all payment transaction records."
+            "description": "Stores all payment transaction records.",
+            "interfaces": [
+                {
+                    "unique-id": "sql-port",
+                    "name": "SQL Port",
+                    "description": "Database connection port",
+                    "protocol": "JDBC"
+                }
+            ]
         }
     ],
     "relationships": [
         {
-            "unique-id": "customer-interaction",
-            "description": "Customer submits payment details",
+            "unique-id": "user-to-service-interaction",
+            "description": "End user interacts with the payment service to submit transactions.",
             "relationship-type": {
                 "interacts": {
-                    "actor": "customer",
+                    "actor": "end-user",
                     "nodes": ["payment-processing-service"]
                 }
             }
@@ -51,11 +65,25 @@
                         "node": "payment-processing-service"
                     },
                     "destination": {
-                        "node": "transaction-db"
+                        "node": "transaction-db",
+                        "interfaces": ["sql-port"]
                     }
                 }
             },
-            "protocol": "TCP"
+            "protocol": "JDBC"
+        },
+        {
+            "unique-id": "system-composition",
+            "description": "The payment system is composed of the processing service and the database.",
+            "relationship-type": {
+                "composed-of": {
+                    "container": "payment-system",
+                    "nodes": [
+                        "payment-processing-service",
+                        "transaction-db"
+                    ]
+                }
+            }
         }
     ]
 }
