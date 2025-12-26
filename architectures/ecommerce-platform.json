@@ -44,6 +44,70 @@
             ]
         }
     },
+    "flows": [
+        {
+            "unique-id": "order-processing-flow",
+            "name": "Customer Order Processing",
+            "description": "End-to-end flow from customer placing an order to payment confirmation",
+            "transitions": [
+                {
+                    "relationship-unique-id": "customer-interacts-gateway",
+                    "sequence-number": 1,
+                    "description": "Customer submits order via web interface",
+                    "direction": "source-to-destination"
+                },
+                {
+                    "relationship-unique-id": "gateway-connects-order",
+                    "sequence-number": 2,
+                    "description": "API Gateway routes order to Order Service",
+                    "direction": "source-to-destination"
+                },
+                {
+                    "relationship-unique-id": "order-connects-payment",
+                    "sequence-number": 3,
+                    "description": "Order Service initiates payment processing",
+                    "direction": "source-to-destination"
+                }
+            ]
+        },
+        {
+            "unique-id": "inventory-check-flow",
+            "name": "Inventory Stock Check",
+            "description": "Admin checks and updates inventory stock levels",
+            "transitions": [
+                {
+                    "relationship-unique-id": "admin-interacts-gateway",
+                    "sequence-number": 1,
+                    "description": "Admin requests inventory status",
+                    "direction": "source-to-destination"
+                },
+                {
+                    "relationship-unique-id": "gateway-connects-inventory",
+                    "sequence-number": 2,
+                    "description": "Route to inventory service",
+                    "direction": "source-to-destination"
+                },
+                {
+                    "relationship-unique-id": "inventory-connects-db",
+                    "sequence-number": 3,
+                    "description": "Query current stock levels",
+                    "direction": "source-to-destination"
+                },
+                {
+                    "relationship-unique-id": "inventory-connects-db",
+                    "sequence-number": 4,
+                    "description": "Return stock data",
+                    "direction": "destination-to-source"
+                },
+                {
+                    "relationship-unique-id": "gateway-connects-inventory",
+                    "sequence-number": 5,
+                    "description": "Return inventory report",
+                    "direction": "destination-to-source"
+                }
+            ]
+        }
+    ],
     "nodes": [
         {
             "unique-id": "customer",

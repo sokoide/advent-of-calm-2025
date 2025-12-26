@@ -12,6 +12,7 @@ This repository tracks my 24-day journey learning the Common Architecture Langua
 - [x] Day 6: Document with Metadata
 - [x] Day 7: Build Complete E-Commerce Architecture
 - [x] Day 8: Add security and performance controls for NFRs
+- [x] Day 9: Model order processing and inventory check flows
 
 ## Tools
 
