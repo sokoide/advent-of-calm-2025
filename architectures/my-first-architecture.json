@@ -1,0 +1,61 @@
+{
+    "$schema": "https://calm.finos.org/release/1.1/meta/calm.json",
+    "unique-id": "my-payment-system",
+    "name": "My Payment System",
+    "description": "An architecture representing a payment processing system.",
+    "nodes": [
+        {
+            "unique-id": "customer",
+            "node-type": "actor",
+            "name": "Customer",
+            "description": "Individual performing a credit card transaction."
+        },
+        {
+            "unique-id": "payment-processing-service",
+            "node-type": "service",
+            "name": "Payment Processing Service",
+            "description": "A service that handles credit card transactions.",
+            "interfaces": [
+                {
+                    "unique-id": "payment-api",
+                    "name": "Payment API",
+                    "description": "REST API for processing payments",
+                    "protocol": "HTTPS"
+                }
+            ]
+        },
+        {
+            "unique-id": "transaction-db",
+            "node-type": "database",
+            "name": "Transaction Database",
+            "description": "Stores all payment transaction records."
+        }
+    ],
+    "relationships": [
+        {
+            "unique-id": "customer-interaction",
+            "description": "Customer submits payment details",
+            "relationship-type": {
+                "interacts": {
+                    "actor": "customer",
+                    "nodes": ["payment-processing-service"]
+                }
+            }
+        },
+        {
+            "unique-id": "service-to-db",
+            "description": "Payment service persists transactions to the database.",
+            "relationship-type": {
+                "connects": {
+                    "source": {
+                        "node": "payment-processing-service"
+                    },
+                    "destination": {
+                        "node": "transaction-db"
+                    }
+                }
+            },
+            "protocol": "TCP"
+        }
+    ]
+}
