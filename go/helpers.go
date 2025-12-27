@@ -26,6 +26,7 @@ func (a *Architecture) AddControl(id string, desc string, reqs ...Requirement) *
 
 func (a *Architecture) Node(id string, ntype NodeType, name, desc string) *Node {
 	n := &Node{
+		arch:        a,
 		UniqueID:    id,
 		NodeType:    ntype,
 		Name:        name,
