@@ -93,13 +93,13 @@
                 {
                     "relationship-unique-id": "lb-connects-gateway-1",
                     "sequence-number": 2,
-                    "description": "LB routes to Gateway 1",
+                    "description": "LB routes to API Gateway Instance 1",
                     "direction": "source-to-destination"
                 },
                 {
                     "relationship-unique-id": "gateway-1-connects-order",
                     "sequence-number": 3,
-                    "description": "Gateway 1 routes to Order Service",
+                    "description": "API Gateway Instance 1 routes to Order Service",
                     "direction": "source-to-destination"
                 },
                 {
@@ -136,13 +136,13 @@
                 {
                     "relationship-unique-id": "lb-connects-gateway-2",
                     "sequence-number": 2,
-                    "description": "LB routes to Gateway 2",
+                    "description": "LB routes to API Gateway Instance 2",
                     "direction": "source-to-destination"
                 },
                 {
                     "relationship-unique-id": "gateway-2-connects-inventory",
                     "sequence-number": 3,
-                    "description": "Gateway 2 routes to inventory service",
+                    "description": "API Gateway Instance 2 routes to inventory service",
                     "direction": "source-to-destination"
                 },
                 {
@@ -155,6 +155,12 @@
                     "relationship-unique-id": "inventory-connects-db",
                     "sequence-number": 5,
                     "description": "Return stock data",
+                    "direction": "destination-to-source"
+                },
+                {
+                    "relationship-unique-id": "gateway-2-connects-inventory",
+                    "sequence-number": 6,
+                    "description": "Return inventory report",
                     "direction": "destination-to-source"
                 }
             ]

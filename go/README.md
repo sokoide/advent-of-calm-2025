@@ -93,6 +93,18 @@ The Go DSL manages all connections via the `LinksContainer` struct. Referencing 
 fb.Step(lc.OrderToInv.GetID(), "Checking inventory")
 ```
 
+### 4. Proving "Redundancy" and "Distribution" via Flow Definitions
+
+CALM flow definitions are "samples" carved out from the vast number of communication patterns within a system.
+
+In our DSL implementation, the Order Flow and Inventory Flow intentionally use different gateway instances. This is not a physical constraint (i.e., flows don't require dedicated gateways) but rather an **intentional modeling technique** to convey the following architectural messages:
+
+- **Visualizing High Availability (HA)**: Demonstrates that multiple gateways are actually running (Active-Active) rather than just being idle standbys.
+- **Representing Load Balancing**: Illustrates how the Load Balancer distributes requests across different instances by tracing different paths for different business processes.
+- **Validating Wiring Coverage**: Ensures that every physical connection (relationship) is utilized by at least one flow, proving there are no "dead components" in the architecture.
+
+By separating "flow recipes" (steps) from "instances," the DSL automatically generates these sophisticated representations while maintaining perfect internal integrity.
+
 ## DSL Naming Conventions
 
 | Prefix / Method | Role | Description | Example |
