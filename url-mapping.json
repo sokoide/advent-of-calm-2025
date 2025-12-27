@@ -1,4 +1,7 @@
 {
   "https://example.com/standards/company-node-standard.json": "standards/company-node-standard.json",
-  "https://example.com/standards/company-relationship-standard.json": "standards/company-relationship-standard.json"
+  "https://example.com/standards/company-relationship-standard.json": "standards/company-relationship-standard.json",
+  "https://example.com/patterns/web-app-pattern.json": "patterns/web-app-pattern.json",
+  "https://example.com/patterns/company-base-pattern.json": "patterns/company-base-pattern.json",
+  "https://example.com/patterns/rest-api-interface.json": "patterns/rest-api-interface.json"
 }
