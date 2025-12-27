@@ -82,7 +82,7 @@ metaOps = map[string]any{"oncall": "#oncall-ops"}
 a.DefineNode("svc", Service, ..., WithMeta(Merge(metaTier1, metaOps)))
 ```
 
-### 3. リレーションシップの構造化管理と型安全な参照
+### 4. リレーションシップの構造化管理と型安全な参照
 
 JSON のフロー定義は「文字列 ID の羅列」であり、リレーションシップ ID が変更されても気づくことができず、モデルが壊れる原因となります。
 
@@ -93,7 +93,7 @@ Go では `LinksContainer` 構造体ですべての接続を管理し、コー�
 fb.Step(lc.OrderToInv.GetID(), "Checking inventory")
 ```
 
-### 4. フロー定義による「冗長性」と「分散」の証明
+### 5. フロー定義による「冗長性」と「分散」の証明
 
 CALM のフロー定義は、システム内の膨大な通信パターンから代表的なものを切り出した「サンプル」です。
 

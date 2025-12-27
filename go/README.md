@@ -82,7 +82,7 @@ metaOps = map[string]any{"oncall": "#oncall-ops"}
 a.DefineNode("svc", Service, ..., WithMeta(Merge(metaTier1, metaOps)))
 ```
 
-### 3. Structured Relationships and Type-Safe References
+### 4. Structured Relationships and Type-Safe References
 
 JSON flow definitions are merely lists of string IDs. If a relationship ID changes, flow references silently break.
 
@@ -93,7 +93,7 @@ The Go DSL manages all connections via the `LinksContainer` struct. Referencing 
 fb.Step(lc.OrderToInv.GetID(), "Checking inventory")
 ```
 
-### 4. Proving "Redundancy" and "Distribution" via Flow Definitions
+### 5. Proving "Redundancy" and "Distribution" via Flow Definitions
 
 CALM flow definitions are "samples" carved out from the vast number of communication patterns within a system.
 
