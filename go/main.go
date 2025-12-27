@@ -2,6 +2,8 @@ package main
 
 import "fmt"
 
+const numGateways = 2
+
 func main() {
 	arch := NewArchitecture(
 		"ecommerce-platform-architecture",
@@ -175,7 +177,7 @@ func defineNodes(a *Architecture) *NodesContainer {
 		),
 	}
 
-	for i := 1; i <= 2; i++ {
+	for i := 1; i <= numGateways; i++ {
 		id := fmt.Sprintf("api-gateway-%d", i)
 		desc := "Primary API Gateway instance."
 		if i == 2 {
@@ -192,7 +194,6 @@ func defineNodes(a *Architecture) *NodesContainer {
 				"log-query":       fmt.Sprintf("service:api-gateway AND instance:%d", i),
 				"alerts":          []string{"Gateway-5xx-Rate", "Gateway-HighLatency"},
 				"repository":      "https://github.com/example/api-gateway",
-				"dependencies":    []string{"order-service", "inventory-service"},
 			})))
 		gw.Interface(fmt.Sprintf("gateway-%d-http", i), "HTTP").SetName("HTTP Interface").SetPort(80)
 		gw.Interface(fmt.Sprintf("order-client-%d", i), "REST")
@@ -200,12 +201,6 @@ func defineNodes(a *Architecture) *NodesContainer {
 		gw.Interface(fmt.Sprintf("gateway-%d-health", i), "HTTP").SetName("Health Check").SetPath("/health")
 		nc.Gateways = append(nc.Gateways, gw)
 	}
-
-	gatewayIDs := make([]string, 0, len(nc.Gateways))
-	for _, gw := range nc.Gateways {
-		gatewayIDs = append(gatewayIDs, gw.UniqueID)
-	}
-	nc.LB.AddMeta("dependencies", gatewayIDs)
 
 	orderFailures := []map[string]any{
 		{
@@ -246,7 +241,6 @@ func defineNodes(a *Architecture) *NodesContainer {
 			"alerts":          []string{"OrderCreationFailureRate", "OrderDBConectionExhausted"},
 			"repository":      "https://github.com/example/order-service",
 			"failure-modes":   orderFailures,
-			"dependencies":    []string{"order-database-cluster", "inventory-service", "message-broker"},
 			"sla-tier":        "tier-1",
 		})),
 		WithControl(
@@ -279,7 +273,6 @@ func defineNodes(a *Architecture) *NodesContainer {
 			"log-query":       "app:inventory-service",
 			"alerts":          []string{"InventoryCacheInconsistency", "StockUpdateFailure"},
 			"repository":      "https://github.com/example/inventory-service",
-			"dependencies":    []string{"inventory-db"},
 			"failure-modes": []map[string]any{
 				{
 					"check":        "Check DB lock metrics and slow query log",
@@ -316,7 +309,6 @@ func defineNodes(a *Architecture) *NodesContainer {
 			"log-query":       "app:payment-service",
 			"alerts":          []string{"PaymentGatewayTimeout", "PCIViolationAttempt"},
 			"repository":      "https://github.com/example/payment-service",
-			"dependencies":    []string{"external-payment-provider"},
 			"failure-modes": []map[string]any{
 				{
 					"check":        "Verify external gateway status page",
@@ -456,6 +448,26 @@ func defineNodes(a *Architecture) *NodesContainer {
 		SetDB("inventory_v1").
 		SetHost("inventory-db.example.com")
 
+	// --- Dynamic Post-Processing (Dependencies) ---
+
+	// LB depends on all gateways
+	gwIDs := make([]string, 0, len(nc.Gateways))
+	for _, gw := range nc.Gateways {
+		gwIDs = append(gwIDs, gw.UniqueID)
+	}
+	nc.LB.AddMeta("dependencies", gwIDs)
+
+	// Gateways depend on backend services
+	gwDeps := []string{nc.OrderSvc.UniqueID, nc.InventorySvc.UniqueID}
+	for _, gw := range nc.Gateways {
+		gw.AddMeta("dependencies", gwDeps)
+	}
+
+	// Services depend on infrastructure
+	nc.OrderSvc.AddMeta("dependencies", []string{nc.DBCluster.UniqueID, nc.InventorySvc.UniqueID, nc.Broker.UniqueID})
+	nc.InventorySvc.AddMeta("dependencies", []string{nc.InventoryDB.UniqueID})
+	nc.PaymentSvc.AddMeta("dependencies", []string{"external-payment-provider"})
+
 	return nc
 }
 
@@ -466,13 +478,10 @@ func wireComponents(a *Architecture, n *NodesContainer) *LinksContainer {
 		GWToInv:   make(map[string]*ConnectionBuilder),
 	}
 
-	// --- Interactions ---
-	lc.CustomerToLB = a.Interacts("customer-interacts-lb", "Customer accesses the platform via Load Balancer.", "customer", "load-balancer").
+	lc.CustomerToLB = a.Interacts("customer-interacts-lb", "Customer accesses the platform via Load Balancer.", n.Customer.UniqueID, n.LB.UniqueID).
 		Data("public", true)
-	lc.AdminToLB = a.Interacts("admin-interacts-lb", "Admin manages the platform via Load Balancer.", "admin", "load-balancer").
+	lc.AdminToLB = a.Interacts("admin-interacts-lb", "Admin manages the platform via Load Balancer.", n.Admin.UniqueID, n.LB.UniqueID).
 		Data("internal", true)
-
-	// --- Wiring (Explicitly ordered loops to match original JSON) ---
 
 	for i, gw := range n.Gateways {
 		id := gw.UniqueID
@@ -523,7 +532,6 @@ func wireComponents(a *Architecture, n *NodesContainer) *LinksContainer {
 		WithID("inventory-connects-db").
 		Via("inventory-db-client", "inventory-sql").Is("internal").Encrypted(true).Tag("monitoring", true)
 
-	// Compositions (Dynamically built from NodesContainer)
 	a.ComposedOf("broker-composition", "Message broker contains the order queue.", n.Broker.UniqueID, []string{n.OrderQueue.UniqueID}).
 		Data("internal", false)
 	a.ComposedOf("order-db-composition", "Primary and replica databases form the order database cluster.", n.DBCluster.UniqueID, []string{n.OrderPrimary.UniqueID, n.OrderReplica.UniqueID}).
@@ -549,11 +557,12 @@ func wireComponents(a *Architecture, n *NodesContainer) *LinksContainer {
 }
 
 func defineFlows(a *Architecture, n *NodesContainer, l *LinksContainer) {
-	// Dynamically pick gateways for flows from the container
 	if len(n.Gateways) == 0 {
 		return
 	}
-	gw1ID := n.Gateways[0].UniqueID
+
+	// Flow 1 uses the first available gateway
+	gw1 := n.Gateways[0].UniqueID
 	a.DefineFlow("order-processing-flow", "Customer Order Processing", "End-to-end flow from customer placing an order to payment confirmation").
 		MetaMap(map[string]any{
 			"business-impact":        "Customers cannot complete purchases - direct revenue loss",
@@ -563,16 +572,18 @@ func defineFlows(a *Architecture, n *NodesContainer, l *LinksContainer) {
 		}).
 		Steps(
 			StepSpec{ID: l.CustomerToLB.UniqueID, Desc: "Customer submits order via Load Balancer"},
-			StepSpec{ID: l.LBToGW[gw1ID].GetID(), Desc: "LB routes to Gateway 1"},
-			StepSpec{ID: l.GWToOrder[gw1ID].GetID(), Desc: "Gateway 1 routes to Order Service"},
+			StepSpec{ID: l.LBToGW[gw1].GetID(), Desc: "LB routes to Gateway 1"},
+			StepSpec{ID: l.GWToOrder[gw1].GetID(), Desc: "Gateway 1 routes to Order Service"},
 			StepSpec{ID: l.OrderToQueue.GetID(), Desc: "Order Service publishes payment task"},
 			StepSpec{ID: l.QueueToPay.GetID(), Desc: "Payment Service processes task from queue"},
 		)
 
-	if len(n.Gateways) < 2 {
-		return
+	// Flow 2 uses the second gateway if available, falls back to the first
+	gw2 := gw1
+	if len(n.Gateways) >= 2 {
+		gw2 = n.Gateways[1].UniqueID
 	}
-	gw2ID := n.Gateways[1].UniqueID
+
 	a.DefineFlow("inventory-check-flow", "Inventory Stock Check", "Admin checks and updates inventory stock levels").
 		MetaMap(map[string]any{
 			"business-impact":        "Stock levels may be inaccurate - risk of overselling",
@@ -582,8 +593,8 @@ func defineFlows(a *Architecture, n *NodesContainer, l *LinksContainer) {
 		}).
 		Steps(
 			StepSpec{ID: l.AdminToLB.UniqueID, Desc: "Admin requests inventory status via LB"},
-			StepSpec{ID: l.LBToGW[gw2ID].GetID(), Desc: "LB routes to Gateway 2"},
-			StepSpec{ID: l.GWToInv[gw2ID].GetID(), Desc: "Gateway 2 routes to inventory service"},
+			StepSpec{ID: l.LBToGW[gw2].GetID(), Desc: "LB routes to Gateway 2"},
+			StepSpec{ID: l.GWToInv[gw2].GetID(), Desc: "Gateway 2 routes to inventory service"},
 			StepSpec{ID: l.InvToDB.GetID(), Desc: "Query current stock levels"},
 			StepSpec{ID: l.InvToDB.GetID(), Desc: "Return stock data", Dir: "destination-to-source"},
 		)
