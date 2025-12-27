@@ -161,6 +161,21 @@ func (f *Flow) Step(relID string, seq int, desc string, dir string) *Flow {
 // --- Global Helpers ---
 func BoolPtr(b bool) *bool { return &b }
 
+// Merge combines multiple maps into a single metadata map.
+// It panics if a key collision is detected to ensure composition is safe.
+func Merge(maps ...map[string]any) map[string]any {
+	res := make(map[string]any)
+	for _, m := range maps {
+		for k, v := range m {
+			if _, exists := res[k]; exists {
+				panic(fmt.Sprintf("metadata collision: key '%s' defined multiple times", k))
+			}
+			res[k] = v
+		}
+	}
+	return res
+}
+
 func NewRequirement(url string, config any) Requirement {
 	return Requirement{RequirementURL: url, Config: config}
 }
@@ -208,10 +223,16 @@ func WithMeta(meta map[string]any) NodeOption {
 }
 
 // WithOwner sets the owner and cost center.
+// It also ensures the 'owner' key in metadata is synchronized.
 func WithOwner(owner, costCenter string) NodeOption {
 	return func(n *Node) {
 		n.Owner = owner
 		n.CostCenter = costCenter
+		if n.Metadata == nil {
+			n.Metadata = make(map[string]any)
+		}
+		// Explicitly set in metadata to ensure consistency across CALM models
+		n.Metadata["owner"] = owner
 	}
 }
 

@@ -1,4 +1,4 @@
-.PHONY: build format run validate diff clean help setup
+.PHONY: build format run validate diff difftool clean help setup
 
 # デフォルトターゲット
 help:
@@ -9,6 +9,7 @@ help:
 	@echo "  make run      - プログラムを実行してアーキテクチャ JSON を出力します"
 	@echo "  make validate - アーキテクチャを生成し、CALM バリデーションを実行します"
 	@echo "  make diff     - 既存の ecommerce-platform.json との差分を確認します"
+	@echo "  make difftool - 既存の ecommerce-platform.json との差分を目で確認します"
 	@echo "  make clean    - 生成されたバイナリや一時ファイルを削除します"
 
 # セットアップ: 必要なツールをインストール
@@ -40,6 +41,14 @@ diff:
 	@go run . > /tmp/raw_actual.json
 	@jq -S . /tmp/raw_actual.json > /tmp/actual.json
 	diff -u /tmp/expected.json /tmp/actual.json || true
+	@rm /tmp/expected.json /tmp/actual.json /tmp/raw_actual.json
+
+# 比較: 既存の ecommerce-platform.json との差分を確認
+difftool:
+	@jq -S . ../architectures/ecommerce-platform.json > /tmp/expected.json
+	@go run . > /tmp/raw_actual.json
+	@jq -S . /tmp/raw_actual.json > /tmp/actual.json
+	nvim -d /tmp/expected.json /tmp/actual.json
 	@rm /tmp/expected.json /tmp/actual.json /tmp/raw_actual.json
 
 # クリーンアップ: 生成物を削除

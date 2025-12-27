@@ -13,10 +13,33 @@ func main() {
 	addGlobalControls(arch)
 
 	nodes := defineNodes(arch)
-	wireComponents(arch, nodes)
+	links := wireComponents(arch, nodes)
+	defineFlows(arch, nodes, links)
 
 	fmt.Println(arch.ToJSON())
 }
+
+// --- Metadata Parts (Composition) ---
+
+var (
+	metaTier1 = map[string]any{"tier": "tier-1", "business-criticality": "high"}
+	metaTier2 = map[string]any{"tier": "tier-2", "business-criticality": "high"}
+
+	metaOpsPlatform = map[string]any{"oncall-slack": "#oncall-platform"}
+	metaOpsOrders   = map[string]any{"oncall-slack": "#oncall-orders"}
+	metaOpsInv      = map[string]any{"oncall-slack": "#oncall-inventory"}
+	metaOpsPayments = map[string]any{"oncall-slack": "#oncall-payments"}
+
+	metaManagedSvc = map[string]any{"deployment-type": "managed-service"}
+	metaContainer  = map[string]any{"deployment-type": "container"}
+
+	metaDBA = map[string]any{
+		"tech-owner":  "DBA Team",
+		"dba-contact": "dba-team@example.com",
+	}
+)
+
+// --- Containers ---
 
 type NodesContainer struct {
 	Customer     *Node
@@ -30,6 +53,23 @@ type NodesContainer struct {
 	OrderPrimary *Node
 	OrderReplica *Node
 	InventoryDB  *Node
+	Broker       *Node
+	DBCluster    *Node
+	System       *Node
+}
+
+type LinksContainer struct {
+	CustomerToLB *Relationship
+	AdminToLB    *Relationship
+	LBToGW       map[string]*ConnectionBuilder
+	GWToOrder    map[string]*ConnectionBuilder
+	GWToInv      map[string]*ConnectionBuilder
+	OrderToPriDB *ConnectionBuilder
+	OrderToRepDB *ConnectionBuilder
+	OrderToQueue *ConnectionBuilder
+	OrderToInv   *ConnectionBuilder
+	QueueToPay   *ConnectionBuilder
+	InvToDB      *ConnectionBuilder
 }
 
 func setupGeneralInfo(a *Architecture) {
@@ -60,9 +100,7 @@ func setupGeneralInfo(a *Architecture) {
 }
 
 func addGlobalControls(a *Architecture) {
-	a.AddControl(
-		"security",
-		"Data encryption and secure communication requirements",
+	a.AddControl("security", "Data encryption and secure communication requirements",
 		NewRequirement(
 			"https://internal-policy.example.com/security/encryption-at-rest",
 			NewSecurityConfig("AES-256", "all-data-stores"),
@@ -72,9 +110,7 @@ func addGlobalControls(a *Architecture) {
 			"https://configs.example.com/security/tls-config.yaml",
 		),
 	).
-		AddControl(
-			"performance",
-			"System-wide performance and scalability requirements",
+		AddControl("performance", "System-wide performance and scalability requirements",
 			NewRequirement(
 				"https://internal-policy.example.com/performance/response-time-sla",
 				NewPerformanceConfig(200, 100),
@@ -84,9 +120,7 @@ func addGlobalControls(a *Architecture) {
 				"https://configs.example.com/infra/ha-config.yaml",
 			),
 		).
-		AddControl(
-			"high-availability",
-			"System-wide uptime and availability requirements",
+		AddControl("high-availability", "System-wide uptime and availability requirements",
 			NewRequirement(
 				"https://internal-policy.example.com/resilience/availability-sla",
 				NewAvailabilityConfig(99.9, 60),
@@ -103,7 +137,7 @@ func defineNodes(a *Architecture) *NodesContainer {
 	nc.Admin = a.DefineNode("admin", Actor, "Admin", "A staff member who manages products and orders.",
 		WithOwner("ops-team", "CC-1000"))
 
-	a.DefineNode(
+	nc.System = a.DefineNode(
 		"ecommerce-system",
 		System,
 		"E-Commerce Platform",
@@ -117,21 +151,15 @@ func defineNodes(a *Architecture) *NodesContainer {
 		"Load Balancer",
 		"High-availability entry point that distributes traffic to API Gateways.",
 		WithOwner("platform-team", "CC-2000"),
-		WithMeta(map[string]any{
-			"tech-owner":           "Network Team",
-			"owner":                "platform-team",
-			"oncall-slack":         "#oncall-platform",
-			"tier":                 "tier-1",
-			"business-criticality": "high",
-			"ha-enabled":           true,
-			"health-endpoint":      "/status",
-			"runbook":              "https://runbooks.example.com/load-balancer",
-			"dashboard":            "https://grafana.example.com/d/lb-metrics",
-			"log-query":            "service:load-balancer AND error",
-			"alerts":               []string{"LB-HighLatency", "LB-TargetGroupUnhealthy"},
-			"deployment-type":      "managed-service",
-			"dependencies":         []string{"api-gateway-1", "api-gateway-2"},
-		}),
+		WithMeta(Merge(metaTier1, metaOpsPlatform, metaManagedSvc, map[string]any{
+			"tech-owner":      "Network Team",
+			"ha-enabled":      true,
+			"health-endpoint": "/status",
+			"runbook":         "https://runbooks.example.com/load-balancer",
+			"dashboard":       "https://grafana.example.com/d/lb-metrics",
+			"log-query":       "service:load-balancer AND error",
+			"alerts":          []string{"LB-HighLatency", "LB-TargetGroupUnhealthy"},
+		})),
 	)
 	nc.LB.Interface("lb-https", "HTTPS").SetName("Public HTTPS Interface").SetPort(443).SetHost("api.shop.example.com")
 	nc.LB.Interface("lb-to-gateway", "HTTP").SetDesc("Outbound to API Gateways")
@@ -149,37 +177,35 @@ func defineNodes(a *Architecture) *NodesContainer {
 
 	for i := 1; i <= 2; i++ {
 		id := fmt.Sprintf("api-gateway-%d", i)
-		name := fmt.Sprintf("API Gateway Instance %d", i)
 		desc := "Primary API Gateway instance."
 		if i == 2 {
 			desc = "Secondary API Gateway instance for high availability."
 		}
-
-		gw := a.DefineNode(id, Service, name, desc,
+		gw := a.DefineNode(id, Service, fmt.Sprintf("API Gateway Instance %d", i), desc,
 			WithOwner("platform-team", "CC-2000"),
 			WithControl("performance", "API Gateway rate limiting and caching requirements", gwPerf...),
-			WithMeta(map[string]any{
-				"tech-owner":           "Edge Team",
-				"owner":                "platform-team",
-				"deployment-type":      "container",
-				"health-endpoint":      "/health",
-				"runbook":              "https://runbooks.example.com/api-gateway",
-				"dashboard":            "https://grafana.example.com/d/gateway-overview",
-				"log-query":            fmt.Sprintf("service:api-gateway AND instance:%d", i),
-				"alerts":               []string{"Gateway-5xx-Rate", "Gateway-HighLatency"},
-				"repository":           "https://github.com/example/api-gateway",
-				"business-criticality": "high",
-				"tier":                 "tier-1",
-				"oncall-slack":         "#oncall-platform",
-				"dependencies":         []string{"order-service", "inventory-service"},
-			}))
+			WithMeta(Merge(metaTier1, metaOpsPlatform, metaContainer, map[string]any{
+				"tech-owner":      "Edge Team",
+				"health-endpoint": "/health",
+				"runbook":         "https://runbooks.example.com/api-gateway",
+				"dashboard":       "https://grafana.example.com/d/gateway-overview",
+				"log-query":       fmt.Sprintf("service:api-gateway AND instance:%d", i),
+				"alerts":          []string{"Gateway-5xx-Rate", "Gateway-HighLatency"},
+				"repository":      "https://github.com/example/api-gateway",
+				"dependencies":    []string{"order-service", "inventory-service"},
+			})))
 		gw.Interface(fmt.Sprintf("gateway-%d-http", i), "HTTP").SetName("HTTP Interface").SetPort(80)
 		gw.Interface(fmt.Sprintf("order-client-%d", i), "REST")
 		gw.Interface(fmt.Sprintf("inventory-client-%d", i), "REST")
 		gw.Interface(fmt.Sprintf("gateway-%d-health", i), "HTTP").SetName("Health Check").SetPath("/health")
-
 		nc.Gateways = append(nc.Gateways, gw)
 	}
+
+	gatewayIDs := make([]string, 0, len(nc.Gateways))
+	for _, gw := range nc.Gateways {
+		gatewayIDs = append(gatewayIDs, gw.UniqueID)
+	}
+	nc.LB.AddMeta("dependencies", gatewayIDs)
 
 	orderFailures := []map[string]any{
 		{
@@ -211,23 +237,18 @@ func defineNodes(a *Architecture) *NodesContainer {
 		"Order Service",
 		"Handles order creation and lifecycle management.",
 		WithOwner("orders-team", "CC-3000"),
-		WithMeta(map[string]any{
-			"tier":                 "tier-1",
-			"owner":                "orders-team",
-			"business-criticality": "high",
-			"tech-owner":           "Order Team",
-			"oncall-slack":         "#oncall-orders",
-			"health-endpoint":      "/actuator/health",
-			"runbook":              "https://runbooks.example.com/order-service",
-			"dashboard":            "https://grafana.example.com/d/order-service-metrics",
-			"log-query":            "app:order-service AND level:ERROR",
-			"alerts":               []string{"OrderCreationFailureRate", "OrderDBConectionExhausted"},
-			"deployment-type":      "container",
-			"repository":           "https://github.com/example/order-service",
-			"failure-modes":        orderFailures,
-			"dependencies":         []string{"order-database-cluster", "inventory-service", "message-broker"},
-			"sla-tier":             "tier-1",
-		}),
+		WithMeta(Merge(metaTier1, metaOpsOrders, metaContainer, map[string]any{
+			"tech-owner":      "Order Team",
+			"health-endpoint": "/actuator/health",
+			"runbook":         "https://runbooks.example.com/order-service",
+			"dashboard":       "https://grafana.example.com/d/order-service-metrics",
+			"log-query":       "app:order-service AND level:ERROR",
+			"alerts":          []string{"OrderCreationFailureRate", "OrderDBConectionExhausted"},
+			"repository":      "https://github.com/example/order-service",
+			"failure-modes":   orderFailures,
+			"dependencies":    []string{"order-database-cluster", "inventory-service", "message-broker"},
+			"sla-tier":        "tier-1",
+		})),
 		WithControl(
 			"circuit-breaker",
 			"Fault tolerance for downstream service calls",
@@ -250,20 +271,15 @@ func defineNodes(a *Architecture) *NodesContainer {
 
 	nc.InventorySvc = a.DefineNode("inventory-service", Service, "Inventory Service", "Manages product stock levels.",
 		WithOwner("inventory-team", "CC-4000"),
-		WithMeta(map[string]any{
-			"tier":                 "tier-2",
-			"owner":                "inventory-team",
-			"tech-owner":           "Warehouse Team",
-			"oncall-slack":         "#oncall-inventory",
-			"health-endpoint":      "/health",
-			"runbook":              "https://runbooks.example.com/inventory-service",
-			"dashboard":            "https://grafana.example.com/d/inventory-metrics",
-			"log-query":            "app:inventory-service",
-			"alerts":               []string{"InventoryCacheInconsistency", "StockUpdateFailure"},
-			"deployment-type":      "container",
-			"repository":           "https://github.com/example/inventory-service",
-			"business-criticality": "high",
-			"dependencies":         []string{"inventory-db"},
+		WithMeta(Merge(metaTier2, metaOpsInv, metaContainer, map[string]any{
+			"tech-owner":      "Warehouse Team",
+			"health-endpoint": "/health",
+			"runbook":         "https://runbooks.example.com/inventory-service",
+			"dashboard":       "https://grafana.example.com/d/inventory-metrics",
+			"log-query":       "app:inventory-service",
+			"alerts":          []string{"InventoryCacheInconsistency", "StockUpdateFailure"},
+			"repository":      "https://github.com/example/inventory-service",
+			"dependencies":    []string{"inventory-db"},
 			"failure-modes": []map[string]any{
 				{
 					"check":        "Check DB lock metrics and slow query log",
@@ -280,7 +296,7 @@ func defineNodes(a *Architecture) *NodesContainer {
 					"symptom":      "Stale stock levels",
 				},
 			},
-		}))
+		})))
 	nc.InventorySvc.Interface("inventory-api", "REST").SetName("Inventory API").SetPort(8081)
 	nc.InventorySvc.Interface("inventory-db-client", "JDBC")
 	nc.InventorySvc.Interface("inventory-health", "HTTP").SetName("Health Check").SetPath("/health")
@@ -291,20 +307,16 @@ func defineNodes(a *Architecture) *NodesContainer {
 		"Payment Service",
 		"Integrates with external payment providers.",
 		WithOwner("payments-team", "CC-5000"),
-		WithMeta(map[string]any{
-			"tier":                 "tier-1",
-			"owner":                "payments-team",
-			"deployment-type":      "serverless",
-			"tech-owner":           "Payment Team",
-			"oncall-slack":         "#oncall-payments",
-			"health-endpoint":      "/health",
-			"runbook":              "https://runbooks.example.com/payment-service",
-			"dashboard":            "https://grafana.example.com/d/payment-metrics",
-			"log-query":            "app:payment-service",
-			"alerts":               []string{"PaymentGatewayTimeout", "PCIViolationAttempt"},
-			"repository":           "https://github.com/example/payment-service",
-			"business-criticality": "high",
-			"dependencies":         []string{"external-payment-provider"},
+		WithMeta(Merge(metaTier1, metaOpsPayments, map[string]any{
+			"deployment-type": "serverless",
+			"tech-owner":      "Payment Team",
+			"health-endpoint": "/health",
+			"runbook":         "https://runbooks.example.com/payment-service",
+			"dashboard":       "https://grafana.example.com/d/payment-metrics",
+			"log-query":       "app:payment-service",
+			"alerts":          []string{"PaymentGatewayTimeout", "PCIViolationAttempt"},
+			"repository":      "https://github.com/example/payment-service",
+			"dependencies":    []string{"external-payment-provider"},
 			"failure-modes": []map[string]any{
 				{
 					"check":        "Verify external gateway status page",
@@ -321,7 +333,7 @@ func defineNodes(a *Architecture) *NodesContainer {
 					"symptom":      "Unauthorized transaction spikes",
 				},
 			},
-		}),
+		})),
 		WithControl(
 			"compliance",
 			"PCI-DSS compliance for payment processing",
@@ -335,23 +347,24 @@ func defineNodes(a *Architecture) *NodesContainer {
 	nc.PaymentSvc.Interface("payment-consumer", "AMQP").SetDesc("Consumes order messages for payment processing.")
 	nc.PaymentSvc.Interface("payment-health", "HTTP").SetName("Health Check").SetPath("/health")
 
-	a.DefineNode("message-broker", System, "Message Broker (RabbitMQ)", "Central messaging system for failure isolation and async processing.",
+	nc.Broker = a.DefineNode(
+		"message-broker",
+		System,
+		"Message Broker (RabbitMQ)",
+		"Central messaging system for failure isolation and async processing.",
 		WithOwner("platform-team", "CC-2000"),
-		WithMeta(map[string]any{
+		WithMeta(Merge(metaOpsPlatform, metaManagedSvc, map[string]any{
 			"tech-owner":      "Platform Team",
-			"owner":           "platform-team",
 			"tier":            "tier-1",
-			"oncall-slack":    "#oncall-platform",
 			"health-endpoint": "/health",
 			"runbook":         "https://runbooks.example.com/rabbitmq",
 			"dashboard":       "https://grafana.example.com/d/rabbitmq-overview",
 			"log-query":       "service:rabbitmq",
 			"alerts":          []string{"RabbitMQQueueSizeHigh", "RabbitMQConsumerDown"},
-			"deployment-type": "managed-service",
 			"adr":             "docs/adr/0001-use-message-queue-for-async-processing.md",
-		})).
-		Interface("amqp-port", "AMQP").
-		SetPort(5672)
+		})),
+	)
+	nc.Broker.Interface("amqp-port", "AMQP").SetPort(5672)
 
 	nc.OrderQueue = a.DefineNode(
 		"order-queue",
@@ -361,7 +374,7 @@ func defineNodes(a *Architecture) *NodesContainer {
 		WithOwner("orders-team", "CC-3000"),
 	)
 
-	a.DefineNode(
+	nc.DBCluster = a.DefineNode(
 		"order-database-cluster",
 		System,
 		"Order Database Cluster",
@@ -377,24 +390,28 @@ func defineNodes(a *Architecture) *NodesContainer {
 		),
 	)
 
-	dbCommonMeta := map[string]any{
-		"tech-owner":          "DBA Team",
-		"backup-schedule":     "daily at 02:00 UTC",
-		"restore-time":        "60 minutes",
-		"dba-contact":         "dba-team@example.com",
-		"deployment-type":     "managed-service",
-		"data-classification": "PII",
-		"replication-mode":    "async",
-	}
-
 	nc.OrderPrimary = a.DefineNode(
 		"order-database-primary",
 		Database,
 		"Order Database (Primary)",
 		"Main writable database for orders.",
-		WithOwner("dba-team", "CC-3000"),
-		WithMeta(dbCommonMeta),
-		WithMeta(map[string]any{"role": "primary"}),
+		WithOwner(
+			"dba-team",
+			"CC-3000",
+		),
+		WithMeta(
+			Merge(
+				metaDBA,
+				metaManagedSvc,
+				map[string]any{
+					"backup-schedule":     "daily at 02:00 UTC",
+					"restore-time":        "60 minutes",
+					"data-classification": "PII",
+					"replication-mode":    "async",
+					"role":                "primary",
+				},
+			),
+		),
 	)
 	nc.OrderPrimary.Interface("order-sql-primary", "JDBC").
 		SetPort(5432).
@@ -406,9 +423,23 @@ func defineNodes(a *Architecture) *NodesContainer {
 		Database,
 		"Order Database (Replica)",
 		"Read-only replica for scaling read operations.",
-		WithOwner("dba-team", "CC-3000"),
-		WithMeta(dbCommonMeta),
-		WithMeta(map[string]any{"role": "replica"}),
+		WithOwner(
+			"dba-team",
+			"CC-3000",
+		),
+		WithMeta(
+			Merge(
+				metaDBA,
+				metaManagedSvc,
+				map[string]any{
+					"backup-schedule":     "daily at 02:00 UTC",
+					"restore-time":        "60 minutes",
+					"data-classification": "PII",
+					"replication-mode":    "async",
+					"role":                "replica",
+				},
+			),
+		),
 	)
 	nc.OrderReplica.Interface("order-sql-replica", "JDBC").
 		SetPort(5432).
@@ -416,13 +447,10 @@ func defineNodes(a *Architecture) *NodesContainer {
 		SetHost("orders-replica.example.com")
 
 	nc.InventoryDB = a.DefineNode("inventory-db", Database, "Inventory Database", "Stores stock levels.",
-		WithOwner("dba-team", "CC-4000"), WithMeta(map[string]any{
-			"tech-owner":      "DBA Team",
+		WithOwner("dba-team", "CC-4000"), WithMeta(Merge(metaDBA, metaManagedSvc, map[string]any{
 			"backup-schedule": "weekly at Sunday 03:00 UTC",
 			"restore-time":    "30 minutes",
-			"dba-contact":     "dba-team@example.com",
-			"deployment-type": "managed-service",
-		}))
+		})))
 	nc.InventoryDB.Interface("inventory-sql", "JDBC").
 		SetPort(5432).
 		SetDB("inventory_v1").
@@ -431,59 +459,101 @@ func defineNodes(a *Architecture) *NodesContainer {
 	return nc
 }
 
-func wireComponents(a *Architecture, n *NodesContainer) {
+func wireComponents(a *Architecture, n *NodesContainer) *LinksContainer {
+	lc := &LinksContainer{
+		LBToGW:    make(map[string]*ConnectionBuilder),
+		GWToOrder: make(map[string]*ConnectionBuilder),
+		GWToInv:   make(map[string]*ConnectionBuilder),
+	}
+
 	// --- Interactions ---
-	customerInteractsLB := a.Interacts("customer-interacts-lb", "Customer accesses the platform via Load Balancer.", "customer", "load-balancer").
+	lc.CustomerToLB = a.Interacts("customer-interacts-lb", "Customer accesses the platform via Load Balancer.", "customer", "load-balancer").
 		Data("public", true)
-	adminInteractsLB := a.Interacts("admin-interacts-lb", "Admin manages the platform via Load Balancer.", "admin", "load-balancer").
+	lc.AdminToLB = a.Interacts("admin-interacts-lb", "Admin manages the platform via Load Balancer.", "admin", "load-balancer").
 		Data("internal", true)
 
-	// --- Wiring (Match original JSON order) ---
+	// --- Wiring (Explicitly ordered loops to match original JSON) ---
 
-	lbToGateway1 := n.LB.ConnectTo(n.Gateways[0], "Load Balancer distributes traffic to Gateway Instance 1.").
-		WithID("lb-connects-gateway-1").Via("lb-to-gateway", "gateway-1-http").Is("internal").Encrypted(true)
+	for i, gw := range n.Gateways {
+		id := gw.UniqueID
+		lc.LBToGW[id] = n.LB.ConnectTo(gw, fmt.Sprintf("Load Balancer distributes traffic to Gateway Instance %d.", i+1)).
+			WithID(fmt.Sprintf("lb-connects-gateway-%d", i+1)).
+			Via("lb-to-gateway", fmt.Sprintf("gateway-%d-http", i+1)).
+			Is("internal").
+			Encrypted(true)
+	}
 
-	lbToGateway2 := n.LB.ConnectTo(n.Gateways[1], "Load Balancer distributes traffic to Gateway Instance 2.").
-		WithID("lb-connects-gateway-2").Via("lb-to-gateway", "gateway-2-http").Is("internal").Encrypted(true)
+	for i, gw := range n.Gateways {
+		id := gw.UniqueID
+		lc.GWToOrder[id] = gw.ConnectTo(n.OrderSvc, fmt.Sprintf("Gateway %d forwards requests to Order Service.", i+1)).
+			WithID(fmt.Sprintf("gateway-%d-connects-order", i+1)).
+			Via(fmt.Sprintf("order-client-%d", i+1), "order-api").Is("internal").Encrypted(true)
+	}
 
-	gateway1ToOrder := n.Gateways[0].ConnectTo(n.OrderSvc, "Gateway 1 forwards requests to Order Service.").
-		WithID("gateway-1-connects-order").Via("order-client-1", "order-api").Is("internal").Encrypted(true)
+	for i, gw := range n.Gateways {
+		id := gw.UniqueID
+		lc.GWToInv[id] = gw.ConnectTo(n.InventorySvc, fmt.Sprintf("Gateway %d forwards requests to Inventory Service.", i+1)).
+			WithID(fmt.Sprintf("gateway-%d-connects-inventory", i+1)).
+			Via(fmt.Sprintf("inventory-client-%d", i+1), "inventory-api").
+			Is("internal").
+			Encrypted(true)
+	}
 
-	n.Gateways[1].ConnectTo(n.OrderSvc, "Gateway 2 forwards requests to Order Service.").
-		WithID("gateway-2-connects-order").Via("order-client-2", "order-api").Is("internal").Encrypted(true)
-
-	n.Gateways[0].ConnectTo(n.InventorySvc, "Gateway 1 forwards requests to Inventory Service.").
-		WithID("gateway-1-connects-inventory").Via("inventory-client-1", "inventory-api").Is("internal").Encrypted(true)
-
-	gateway2ToInventory := n.Gateways[1].ConnectTo(n.InventorySvc, "Gateway 2 forwards requests to Inventory Service.").
-		WithID("gateway-2-connects-inventory").Via("inventory-client-2", "inventory-api").Is("internal").Encrypted(true)
-
-	n.OrderSvc.ConnectTo(n.OrderPrimary, "Order Service persists data to Primary Order Database.").
+	lc.OrderToPriDB = n.OrderSvc.ConnectTo(n.OrderPrimary, "Order Service persists data to Primary Order Database.").
 		WithID("order-connects-primary-db").
 		Via("order-db-write-client", "order-sql-primary").Is("confidential").Encrypted(true).Tag("monitoring", true)
 
-	orderToQueue := n.OrderSvc.ConnectTo(n.OrderQueue, "Order Service publishes payment task to queue.").
+	lc.OrderToQueue = n.OrderSvc.ConnectTo(n.OrderQueue, "Order Service publishes payment task to queue.").
 		WithID("order-publishes-to-queue").Via("payment-publisher", "").Is("internal").Encrypted(true).Protocol("AMQP")
 
-	queueToPayment := n.OrderQueue.ConnectTo(n.PaymentSvc, "Payment Service consumes payment task from queue.").
+	lc.QueueToPay = n.OrderQueue.ConnectTo(n.PaymentSvc, "Payment Service consumes payment task from queue.").
 		WithID("payment-subscribes-to-queue").
 		Via("", "payment-consumer").Is("internal").Encrypted(true).Protocol("AMQP")
 
-	n.OrderSvc.ConnectTo(n.OrderReplica, "Order Service reads data from Replica Order Database.").
+	lc.OrderToRepDB = n.OrderSvc.ConnectTo(n.OrderReplica, "Order Service reads data from Replica Order Database.").
 		WithID("order-connects-replica-db").
 		Via("order-db-read-client", "order-sql-replica").Is("confidential").Encrypted(true).Tag("monitoring", true)
 
-	n.OrderSvc.ConnectTo(n.InventorySvc, "Order Service checks/reserves stock in Inventory Service.").
+	lc.OrderToInv = n.OrderSvc.ConnectTo(n.InventorySvc, "Order Service checks/reserves stock in Inventory Service.").
 		WithID("order-connects-inventory").
 		Via("order-inventory-client", "inventory-api").Is("internal").Encrypted(true).
 		Tag("monitoring", true).Tag("circuit-breaker", true).Tag("latency-sla", "< 100ms")
 
-	inventoryToDB := n.InventorySvc.ConnectTo(n.InventoryDB, "Inventory Service manages stock in Inventory Database.").
+	lc.InvToDB = n.InventorySvc.ConnectTo(n.InventoryDB, "Inventory Service manages stock in Inventory Database.").
 		WithID("inventory-connects-db").
 		Via("inventory-db-client", "inventory-sql").Is("internal").Encrypted(true).Tag("monitoring", true)
 
-	// --- Flows ---
+	// Compositions (Dynamically built from NodesContainer)
+	a.ComposedOf("broker-composition", "Message broker contains the order queue.", n.Broker.UniqueID, []string{n.OrderQueue.UniqueID}).
+		Data("internal", false)
+	a.ComposedOf("order-db-composition", "Primary and replica databases form the order database cluster.", n.DBCluster.UniqueID, []string{n.OrderPrimary.UniqueID, n.OrderReplica.UniqueID}).
+		Data("confidential", true)
 
+	sysNodes := []string{n.LB.UniqueID}
+	for _, gw := range n.Gateways {
+		sysNodes = append(sysNodes, gw.UniqueID)
+	}
+	sysNodes = append(
+		sysNodes,
+		n.OrderSvc.UniqueID,
+		n.InventorySvc.UniqueID,
+		n.PaymentSvc.UniqueID,
+		n.DBCluster.UniqueID,
+		n.InventoryDB.UniqueID,
+		n.Broker.UniqueID,
+	)
+	a.ComposedOf("ecommerce-system-composition", "The E-Commerce Platform comprises its core services and databases.", n.System.UniqueID, sysNodes).
+		Data("internal", false)
+
+	return lc
+}
+
+func defineFlows(a *Architecture, n *NodesContainer, l *LinksContainer) {
+	// Dynamically pick gateways for flows from the container
+	if len(n.Gateways) == 0 {
+		return
+	}
+	gw1ID := n.Gateways[0].UniqueID
 	a.DefineFlow("order-processing-flow", "Customer Order Processing", "End-to-end flow from customer placing an order to payment confirmation").
 		MetaMap(map[string]any{
 			"business-impact":        "Customers cannot complete purchases - direct revenue loss",
@@ -492,13 +562,17 @@ func wireComponents(a *Architecture, n *NodesContainer) {
 			"sla":                    "99.9% availability, 30s p99 latency",
 		}).
 		Steps(
-			StepSpec{ID: customerInteractsLB.UniqueID, Desc: "Customer submits order via Load Balancer"},
-			StepSpec{ID: lbToGateway1.GetID(), Desc: "LB routes to Gateway 1"},
-			StepSpec{ID: gateway1ToOrder.GetID(), Desc: "Gateway 1 routes to Order Service"},
-			StepSpec{ID: orderToQueue.GetID(), Desc: "Order Service publishes payment task"},
-			StepSpec{ID: queueToPayment.GetID(), Desc: "Payment Service processes task from queue"},
+			StepSpec{ID: l.CustomerToLB.UniqueID, Desc: "Customer submits order via Load Balancer"},
+			StepSpec{ID: l.LBToGW[gw1ID].GetID(), Desc: "LB routes to Gateway 1"},
+			StepSpec{ID: l.GWToOrder[gw1ID].GetID(), Desc: "Gateway 1 routes to Order Service"},
+			StepSpec{ID: l.OrderToQueue.GetID(), Desc: "Order Service publishes payment task"},
+			StepSpec{ID: l.QueueToPay.GetID(), Desc: "Payment Service processes task from queue"},
 		)
 
+	if len(n.Gateways) < 2 {
+		return
+	}
+	gw2ID := n.Gateways[1].UniqueID
 	a.DefineFlow("inventory-check-flow", "Inventory Stock Check", "Admin checks and updates inventory stock levels").
 		MetaMap(map[string]any{
 			"business-impact":        "Stock levels may be inaccurate - risk of overselling",
@@ -507,28 +581,10 @@ func wireComponents(a *Architecture, n *NodesContainer) {
 			"sla":                    "99.5% availability, 500ms p99 latency",
 		}).
 		Steps(
-			StepSpec{ID: adminInteractsLB.UniqueID, Desc: "Admin requests inventory status via LB"},
-			StepSpec{ID: lbToGateway2.GetID(), Desc: "LB routes to Gateway 2"},
-			StepSpec{ID: gateway2ToInventory.GetID(), Desc: "Gateway 2 routes to inventory service"},
-			StepSpec{ID: inventoryToDB.GetID(), Desc: "Query current stock levels"},
-			StepSpec{ID: inventoryToDB.GetID(), Desc: "Return stock data", Dir: "destination-to-source"},
+			StepSpec{ID: l.AdminToLB.UniqueID, Desc: "Admin requests inventory status via LB"},
+			StepSpec{ID: l.LBToGW[gw2ID].GetID(), Desc: "LB routes to Gateway 2"},
+			StepSpec{ID: l.GWToInv[gw2ID].GetID(), Desc: "Gateway 2 routes to inventory service"},
+			StepSpec{ID: l.InvToDB.GetID(), Desc: "Query current stock levels"},
+			StepSpec{ID: l.InvToDB.GetID(), Desc: "Return stock data", Dir: "destination-to-source"},
 		)
-
-	a.ComposedOf("broker-composition", "Message broker contains the order queue.", "message-broker", []string{"order-queue"}).
-		Data("internal", false)
-	a.ComposedOf("order-db-composition", "Primary and replica databases form the order database cluster.", "order-database-cluster", []string{"order-database-primary", "order-database-replica"}).
-		Data("confidential", true)
-	a.ComposedOf("ecommerce-system-composition", "The E-Commerce Platform comprises its core services and databases.", "ecommerce-system",
-		[]string{
-			"load-balancer",
-			"api-gateway-1",
-			"api-gateway-2",
-			"order-service",
-			"inventory-service",
-			"payment-service",
-			"order-database-cluster",
-			"inventory-db",
-			"message-broker",
-		}).
-		Data("internal", false)
 }

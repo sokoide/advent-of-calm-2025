@@ -1,27 +1,76 @@
 # CALM Architecture Definition in Go
 
-このディレクトリには、CALM アーキテクチャを Go で定義・生成するための DSL 実装が含まれています。
+This directory contains a custom DSL in Go designed to define and generate CALM (Common Architecture Language Model) architectures. The goal is to move from manual JSON editing to "Architecture as Code," leveraging Go's type safety and composition patterns.
 
-## DSL 命名規則 (Naming Conventions)
+## Key Improvements
 
-コードの読みやすさと「書き心地」を維持するため、以下のルールに従ってメソッドを命名しています。
+- **Functional Options Pattern**: Use `DefineNode` with `WithOwner`, `WithMeta`, etc., for declarative and clean node definitions.
+- **Metadata Composition**: The `Merge` helper allows combining reusable metadata parts (e.g., Tier1, DBA, ManagedService) while detecting key collisions at runtime.
+- **Fluent Connection API**: Intuitive wiring via `node.ConnectTo(dest)` and structured relationship management using `LinksContainer`.
+- **Type-safe Flow Construction**: Reduced reliance on string IDs by using relationship objects or their `GetID()` method to define flow steps.
+- **Single Source of Truth for `owner`**: The `WithOwner` option automatically synchronizes the top-level `owner` field and `metadata["owner"]`, ensuring model consistency.
+- **Dynamic Configuration**: Dependencies and flows are built dynamically from node slices (like `n.Gateways`), making it easy to change component counts or IDs.
 
-| 接頭辞 | 役割 | 説明 | 例 |
+## Model Consistency and `make diff`
+
+The latest DSL enforces high consistency by ensuring `owner` information is present in both top-level fields and metadata for all nodes.
+
+Accordingly, the reference JSON in the repository (`architectures/ecommerce-platform.json`) has been updated with the output from the Go DSL. This ensures the entire model library maintains top-tier quality and consistency.
+
+Example of a diff compared to an older, less consistent JSON:
+
+```diff
+     {
+       "unique-id": "customer",
+       "name": "Customer",
++      "metadata": {
++        "owner": "marketing-team"
++      },
+       "owner": "marketing-team"
+     }
+```
+
+## DSL Naming Conventions
+
+| Prefix / Method | Role | Description | Example |
 | :--- | :--- | :--- | :--- |
-| **`New...`** | **独立した部品の生成** | 親が決まっていない単体の部品を作成します。 | `NewRequirement`, `NewSecurityConfig` |
-| **(なし/名詞)** | **工場 (Factory)** | 親オブジェクトから子を生成し、自動的に親のリストへ追加します。 | `arch.Node()`, `node.Interface()`, `arch.Flow()` |
-| **`Add...`** | **コレクションへの追加** | Metadata や Controls などのマップ/スライスへ要素を追加し、親を返します。 | `node.AddMeta()`, `node.AddControl()` |
-| **`Set...`** / **`With...`** | **属性の設定 (Fluent)** | オブジェクト自身のプロパティ値を設定・変更し、自身を返します。 | `intf.SetPort()`, `rel.WithProtocol()` |
+| **`New...`** | **Independent part generation** | Creates a standalone component with no parent. | `NewRequirement`, `NewSecurityConfig` |
+| **`Define...`** | **Declarative creation (Modern)** | Generates a highly configured object using Functional Options. | `arch.DefineNode()`, `arch.DefineFlow()` |
+| **`With...`** | **Option setting** | Configuration functions to be passed to `Define...` methods. | `WithOwner()`, `WithMeta()`, `WithControl()` |
+| **`ConnectTo`** | **Node-centric connection** | Initiates a connection from the node itself, returning a Builder. | `node.ConnectTo(dest)` |
+| **`Via` / `Is` / `Encrypted`** | **Attribute setting (Fluent)** | Fluently configures object properties. | `rel.Via("src", "dst").Encrypted(true)` |
+| **`Merge`** | **Metadata synthesis** | Combines multiple maps into one. Panics on key collisions. | `Merge(metaTier1, metaOps)` |
 
-## 使用方法
+## Recommended Coding Patterns
+
+### 1. Metadata Composition
+
+Define common settings as variables and merge them as needed.
+
+```go
+metaOps = map[string]any{"oncall": "#oncall-ops"}
+a.DefineNode("svc", Service, "Name", "Desc", WithMeta(Merge(metaTier1, metaOps)))
+```
+
+### 2. Structured Relationship Management
+
+Maintain all connections in a `LinksContainer` struct and reference them in flow definitions.
+
+```go
+lc.OrderToInv = n.OrderSvc.ConnectTo(n.InventorySvc, "Check stock").WithID("order-rel")
+// Reference in a flow
+fb.Step(lc.OrderToInv.GetID(), "Checking inventory")
+```
+
+## Usage
 
 ```bash
-# フォーマット (120文字制限適用)
+# Format code (enforces 120 char limit)
 make -C go format
 
-# バリデーション
+# Validate against CALM schema
 make -C go validate
 
-# オリジナル JSON との比較
+# Compare against the original reference JSON (success if no diff)
 make -C go diff
 ```
