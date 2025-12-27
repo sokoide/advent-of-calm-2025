@@ -1,0 +1,765 @@
+{
+    "$schema": "https://calm.finos.org/release/1.1/meta/calm.json",
+    "adrs": [
+        "docs/adr/0001-use-message-queue-for-async-processing.md",
+        "docs/adr/0002-use-oauth2-for-api-authentication.md"
+    ],
+    "unique-id": "ecommerce-platform-architecture",
+    "name": "E-Commerce Order Processing Platform",
+    "description": "A complete architecture for an e-commerce order processing system.",
+    "metadata": {
+        "description": "Re-imagined with Go DSL",
+        "owner": "Architecture Team",
+        "version": "2.0.0-coded"
+    },
+    "controls": {
+        "security": {
+            "description": "Base Security",
+            "requirements": [
+                {
+                    "requirement-url": "https://internal-policy.example.com/security/tls",
+                    "config": {
+                        "algorithm": "TLS 1.3",
+                        "scope": "all"
+                    }
+                }
+            ]
+        }
+    },
+    "flows": [
+        {
+            "unique-id": "order-processing-flow",
+            "name": "Customer Order Processing",
+            "description": "End-to-end flow",
+            "metadata": {
+                "sla": "99.9%"
+            },
+            "transitions": [
+                {
+                    "relationship-unique-id": "customer-interacts-lb",
+                    "sequence-number": 1,
+                    "description": "Step customer-interacts-lb",
+                    "direction": "source-to-destination"
+                },
+                {
+                    "relationship-unique-id": "lb-connects-gateway-1-connects-api-gateway-1",
+                    "sequence-number": 2,
+                    "description": "Step lb-connects-gateway-1-connects-api-gateway-1",
+                    "direction": "source-to-destination"
+                },
+                {
+                    "relationship-unique-id": "api-gateway-1-connects-order-service",
+                    "sequence-number": 3,
+                    "description": "Step api-gateway-1-connects-order-service",
+                    "direction": "source-to-destination"
+                },
+                {
+                    "relationship-unique-id": "order-service-connects-inventory-service",
+                    "sequence-number": 4,
+                    "description": "Step order-service-connects-inventory-service",
+                    "direction": "source-to-destination"
+                },
+                {
+                    "relationship-unique-id": "order-service-connects-order-database-primary",
+                    "sequence-number": 5,
+                    "description": "Step order-service-connects-order-database-primary",
+                    "direction": "source-to-destination"
+                },
+                {
+                    "relationship-unique-id": "order-service-connects-order-queue",
+                    "sequence-number": 6,
+                    "description": "Step order-service-connects-order-queue",
+                    "direction": "source-to-destination"
+                },
+                {
+                    "relationship-unique-id": "order-queue-connects-payment-service",
+                    "sequence-number": 7,
+                    "description": "Step order-queue-connects-payment-service",
+                    "direction": "source-to-destination"
+                }
+            ]
+        },
+        {
+            "unique-id": "inventory-check-flow",
+            "name": "Inventory Stock Check",
+            "description": "Admin checks stock",
+            "metadata": {
+                "sla": "99.5%"
+            },
+            "transitions": [
+                {
+                    "relationship-unique-id": "admin-interacts-lb",
+                    "sequence-number": 1,
+                    "description": "Step admin-interacts-lb",
+                    "direction": "source-to-destination"
+                },
+                {
+                    "relationship-unique-id": "lb-connects-gateway-2-connects-api-gateway-2",
+                    "sequence-number": 2,
+                    "description": "Step lb-connects-gateway-2-connects-api-gateway-2",
+                    "direction": "source-to-destination"
+                },
+                {
+                    "relationship-unique-id": "api-gateway-2-connects-inventory-service",
+                    "sequence-number": 3,
+                    "description": "Step api-gateway-2-connects-inventory-service",
+                    "direction": "source-to-destination"
+                },
+                {
+                    "relationship-unique-id": "inventory-service-connects-inventory-db",
+                    "sequence-number": 4,
+                    "description": "Step inventory-service-connects-inventory-db",
+                    "direction": "source-to-destination"
+                }
+            ]
+        }
+    ],
+    "nodes": [
+        {
+            "unique-id": "customer",
+            "node-type": "actor",
+            "name": "Customer",
+            "description": "A user who browses and purchases products.",
+            "costCenter": "CC-1000",
+            "owner": "marketing-team"
+        },
+        {
+            "unique-id": "admin",
+            "node-type": "actor",
+            "name": "Admin",
+            "description": "A staff member who manages products and orders.",
+            "costCenter": "CC-1000",
+            "owner": "ops-team"
+        },
+        {
+            "unique-id": "ecommerce-system",
+            "node-type": "system",
+            "name": "E-Commerce Platform",
+            "description": "The overall e-commerce system containing microservices.",
+            "costCenter": "CC-2000",
+            "owner": "platform-team"
+        },
+        {
+            "unique-id": "load-balancer",
+            "node-type": "service",
+            "name": "Load Balancer",
+            "description": "High-availability entry point.",
+            "costCenter": "CC-2000",
+            "owner": "platform-team",
+            "metadata": {
+                "business-criticality": "high",
+                "ha-enabled": true,
+                "oncall-slack": "#oncall-platform",
+                "tech-owner": "Network Team",
+                "tier": "tier-1"
+            },
+            "interfaces": [
+                {
+                    "unique-id": "lb-https",
+                    "name": "Public HTTPS Interface",
+                    "protocol": "HTTPS",
+                    "port": 443
+                },
+                {
+                    "unique-id": "lb-to-gateway",
+                    "protocol": "HTTP",
+                    "description": "Outbound to API Gateways"
+                }
+            ]
+        },
+        {
+            "unique-id": "api-gateway-1",
+            "node-type": "service",
+            "name": "API Gateway Instance 1",
+            "description": "Primary API Gateway instance.",
+            "costCenter": "CC-2000",
+            "owner": "platform-team",
+            "metadata": {
+                "deployment-type": "container",
+                "tech-owner": "Edge Team"
+            },
+            "controls": {
+                "performance": {
+                    "description": "Rate limiting",
+                    "requirements": [
+                        {
+                            "requirement-url": "https://internal-policy.example.com/performance/rate-limiting",
+                            "config-url": "https://configs.example.com/gateway/rate-limits.yaml"
+                        }
+                    ]
+                }
+            },
+            "interfaces": [
+                {
+                    "unique-id": "gateway-1-http",
+                    "name": "HTTP Interface",
+                    "protocol": "HTTP",
+                    "port": 80
+                },
+                {
+                    "unique-id": "order-client-1",
+                    "protocol": "REST"
+                },
+                {
+                    "unique-id": "inventory-client-1",
+                    "protocol": "REST"
+                }
+            ]
+        },
+        {
+            "unique-id": "api-gateway-2",
+            "node-type": "service",
+            "name": "API Gateway Instance 2",
+            "description": "Secondary API Gateway instance for HA.",
+            "costCenter": "CC-2000",
+            "owner": "platform-team",
+            "metadata": {
+                "deployment-type": "container",
+                "tech-owner": "Edge Team"
+            },
+            "controls": {
+                "performance": {
+                    "description": "Rate limiting",
+                    "requirements": [
+                        {
+                            "requirement-url": "https://internal-policy.example.com/performance/rate-limiting",
+                            "config-url": "https://configs.example.com/gateway/rate-limits.yaml"
+                        }
+                    ]
+                }
+            },
+            "interfaces": [
+                {
+                    "unique-id": "gateway-2-http",
+                    "name": "HTTP Interface",
+                    "protocol": "HTTP",
+                    "port": 80
+                },
+                {
+                    "unique-id": "order-client-2",
+                    "protocol": "REST"
+                },
+                {
+                    "unique-id": "inventory-client-2",
+                    "protocol": "REST"
+                }
+            ]
+        },
+        {
+            "unique-id": "order-service",
+            "node-type": "service",
+            "name": "Order Service",
+            "description": "Handles order creation.",
+            "costCenter": "CC-3000",
+            "owner": "orders-team",
+            "metadata": {
+                "business-criticality": "high",
+                "tier": "tier-1"
+            },
+            "controls": {
+                "circuit-breaker": {
+                    "description": "Fault tolerance",
+                    "requirements": [
+                        {
+                            "requirement-url": "https://internal-policy.example.com/resilience/circuit-breaker-policy",
+                            "config": {
+                                "failure-threshold-percentage": 50,
+                                "minimum-calls-before-opening": 10,
+                                "wait-duration-seconds": 30
+                            }
+                        }
+                    ]
+                }
+            },
+            "interfaces": [
+                {
+                    "unique-id": "order-api",
+                    "name": "Order API",
+                    "protocol": "REST",
+                    "port": 8080
+                },
+                {
+                    "unique-id": "order-db-write-client",
+                    "protocol": "JDBC"
+                },
+                {
+                    "unique-id": "order-db-read-client",
+                    "protocol": "JDBC"
+                },
+                {
+                    "unique-id": "payment-publisher",
+                    "protocol": "AMQP"
+                },
+                {
+                    "unique-id": "order-inventory-client",
+                    "protocol": "REST"
+                }
+            ]
+        },
+        {
+            "unique-id": "inventory-service",
+            "node-type": "service",
+            "name": "Inventory Service",
+            "description": "Manages product stock.",
+            "costCenter": "CC-4000",
+            "owner": "inventory-team",
+            "metadata": {
+                "tier": "tier-2"
+            },
+            "interfaces": [
+                {
+                    "unique-id": "inventory-api",
+                    "protocol": "REST",
+                    "port": 8081
+                },
+                {
+                    "unique-id": "inventory-db-client",
+                    "protocol": "JDBC"
+                }
+            ]
+        },
+        {
+            "unique-id": "payment-service",
+            "node-type": "service",
+            "name": "Payment Service",
+            "description": "Integrates with external payment providers.",
+            "costCenter": "CC-5000",
+            "owner": "payments-team",
+            "metadata": {
+                "deployment-type": "serverless",
+                "tier": "tier-1"
+            },
+            "controls": {
+                "compliance": {
+                    "description": "PCI-DSS",
+                    "requirements": [
+                        {
+                            "requirement-url": "https://www.pcisecuritystandards.org/documents/PCI-DSS-v4.0",
+                            "config-url": "https://configs.example.com/compliance/pci-dss-config.json"
+                        }
+                    ]
+                }
+            },
+            "interfaces": [
+                {
+                    "unique-id": "payment-api",
+                    "protocol": "REST",
+                    "port": 8082
+                },
+                {
+                    "unique-id": "payment-consumer",
+                    "protocol": "AMQP"
+                }
+            ]
+        },
+        {
+            "unique-id": "message-broker",
+            "node-type": "system",
+            "name": "Message Broker (RabbitMQ)",
+            "description": "Central messaging system.",
+            "costCenter": "CC-2000",
+            "owner": "platform-team",
+            "interfaces": [
+                {
+                    "unique-id": "amqp-port",
+                    "protocol": "AMQP",
+                    "port": 5672
+                }
+            ]
+        },
+        {
+            "unique-id": "order-queue",
+            "node-type": "queue",
+            "name": "Order Payment Queue",
+            "description": "Buffer for orders.",
+            "costCenter": "CC-3000",
+            "owner": "orders-team"
+        },
+        {
+            "unique-id": "order-database-cluster",
+            "node-type": "system",
+            "name": "Order DB Cluster",
+            "description": "HA DB Cluster.",
+            "costCenter": "CC-3000",
+            "owner": "dba-team"
+        },
+        {
+            "unique-id": "order-database-primary",
+            "node-type": "database",
+            "name": "Order DB (Primary)",
+            "description": "Writable DB.",
+            "costCenter": "CC-3000",
+            "owner": "dba-team",
+            "metadata": {
+                "backup-schedule": "daily at 02:00 UTC",
+                "tags": [
+                    "primary"
+                ],
+                "tech-owner": "DBA Team"
+            },
+            "interfaces": [
+                {
+                    "unique-id": "order-sql-primary",
+                    "protocol": "JDBC",
+                    "port": 5432
+                }
+            ]
+        },
+        {
+            "unique-id": "order-database-replica",
+            "node-type": "database",
+            "name": "Order DB (Replica)",
+            "description": "Read-only DB.",
+            "costCenter": "CC-3000",
+            "owner": "dba-team",
+            "metadata": {
+                "backup-schedule": "daily at 02:00 UTC",
+                "tags": [
+                    "replica"
+                ],
+                "tech-owner": "DBA Team"
+            },
+            "interfaces": [
+                {
+                    "unique-id": "order-sql-replica",
+                    "protocol": "JDBC",
+                    "port": 5432
+                }
+            ]
+        },
+        {
+            "unique-id": "inventory-db",
+            "node-type": "database",
+            "name": "Inventory Database",
+            "description": "Stores stock levels.",
+            "costCenter": "CC-4000",
+            "owner": "dba-team",
+            "metadata": {
+                "backup-schedule": "daily at 02:00 UTC",
+                "tech-owner": "DBA Team"
+            },
+            "interfaces": [
+                {
+                    "unique-id": "inventory-sql",
+                    "protocol": "JDBC",
+                    "port": 5432
+                }
+            ]
+        }
+    ],
+    "relationships": [
+        {
+            "unique-id": "customer-interacts-lb",
+            "description": "Customer accesses via LB",
+            "dataClassification": "public",
+            "encrypted": true,
+            "relationship-type": {
+                "interacts": {
+                    "actor": "customer",
+                    "nodes": [
+                        "load-balancer"
+                    ]
+                }
+            }
+        },
+        {
+            "unique-id": "admin-interacts-lb",
+            "description": "Admin manages via LB",
+            "dataClassification": "internal",
+            "encrypted": true,
+            "relationship-type": {
+                "interacts": {
+                    "actor": "admin",
+                    "nodes": [
+                        "load-balancer"
+                    ]
+                }
+            }
+        },
+        {
+            "unique-id": "load-balancer-connects-api-gateway-1",
+            "description": "Routes to Gateway 1",
+            "dataClassification": "internal",
+            "metadata": {
+                "monitoring": true
+            },
+            "relationship-type": {
+                "connects": {
+                    "source": {
+                        "node": "load-balancer",
+                        "interfaces": [
+                            "lb-to-gateway"
+                        ]
+                    },
+                    "destination": {
+                        "node": "api-gateway-1",
+                        "interfaces": [
+                            "gateway-1-http"
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "unique-id": "api-gateway-1-connects-order-service",
+            "description": "Forwards to Order Service",
+            "dataClassification": "internal",
+            "relationship-type": {
+                "connects": {
+                    "source": {
+                        "node": "api-gateway-1",
+                        "interfaces": [
+                            "order-client-1"
+                        ]
+                    },
+                    "destination": {
+                        "node": "order-service",
+                        "interfaces": [
+                            "order-api"
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "unique-id": "api-gateway-1-connects-inventory-service",
+            "description": "Forwards to Inventory Service",
+            "dataClassification": "internal",
+            "relationship-type": {
+                "connects": {
+                    "source": {
+                        "node": "api-gateway-1",
+                        "interfaces": [
+                            "inventory-client-1"
+                        ]
+                    },
+                    "destination": {
+                        "node": "inventory-service",
+                        "interfaces": [
+                            "inventory-api"
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "unique-id": "load-balancer-connects-api-gateway-2",
+            "description": "Routes to Gateway 2",
+            "dataClassification": "internal",
+            "metadata": {
+                "monitoring": true
+            },
+            "relationship-type": {
+                "connects": {
+                    "source": {
+                        "node": "load-balancer",
+                        "interfaces": [
+                            "lb-to-gateway"
+                        ]
+                    },
+                    "destination": {
+                        "node": "api-gateway-2",
+                        "interfaces": [
+                            "gateway-2-http"
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "unique-id": "api-gateway-2-connects-order-service",
+            "description": "Forwards to Order Service",
+            "dataClassification": "internal",
+            "relationship-type": {
+                "connects": {
+                    "source": {
+                        "node": "api-gateway-2",
+                        "interfaces": [
+                            "order-client-2"
+                        ]
+                    },
+                    "destination": {
+                        "node": "order-service",
+                        "interfaces": [
+                            "order-api"
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "unique-id": "api-gateway-2-connects-inventory-service",
+            "description": "Forwards to Inventory Service",
+            "dataClassification": "internal",
+            "relationship-type": {
+                "connects": {
+                    "source": {
+                        "node": "api-gateway-2",
+                        "interfaces": [
+                            "inventory-client-2"
+                        ]
+                    },
+                    "destination": {
+                        "node": "inventory-service",
+                        "interfaces": [
+                            "inventory-api"
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "unique-id": "order-service-connects-order-database-primary",
+            "description": "Persists order data",
+            "dataClassification": "confidential",
+            "metadata": {
+                "monitoring": true
+            },
+            "relationship-type": {
+                "connects": {
+                    "source": {
+                        "node": "order-service",
+                        "interfaces": [
+                            "order-db-write-client"
+                        ]
+                    },
+                    "destination": {
+                        "node": "order-database-primary",
+                        "interfaces": [
+                            "order-sql-primary"
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "unique-id": "order-service-connects-order-database-replica",
+            "description": "Reads order data",
+            "dataClassification": "confidential",
+            "relationship-type": {
+                "connects": {
+                    "source": {
+                        "node": "order-service",
+                        "interfaces": [
+                            "order-db-read-client"
+                        ]
+                    },
+                    "destination": {
+                        "node": "order-database-replica",
+                        "interfaces": [
+                            "order-sql-replica"
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "unique-id": "order-service-connects-order-queue",
+            "description": "Publishes payment task",
+            "dataClassification": "internal",
+            "metadata": {
+                "protocol": "AMQP"
+            },
+            "relationship-type": {
+                "connects": {
+                    "source": {
+                        "node": "order-service",
+                        "interfaces": [
+                            "payment-publisher"
+                        ]
+                    },
+                    "destination": {
+                        "node": "order-queue",
+                        "interfaces": [
+                            ""
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "unique-id": "order-service-connects-inventory-service",
+            "description": "Checks stock",
+            "dataClassification": "internal",
+            "metadata": {
+                "circuit-breaker": true
+            },
+            "relationship-type": {
+                "connects": {
+                    "source": {
+                        "node": "order-service",
+                        "interfaces": [
+                            "order-inventory-client"
+                        ]
+                    },
+                    "destination": {
+                        "node": "inventory-service",
+                        "interfaces": [
+                            "inventory-api"
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "unique-id": "order-queue-connects-payment-service",
+            "description": "Consumes payment task",
+            "dataClassification": "internal",
+            "metadata": {
+                "protocol": "AMQP"
+            },
+            "relationship-type": {
+                "connects": {
+                    "source": {
+                        "node": "order-queue",
+                        "interfaces": [
+                            ""
+                        ]
+                    },
+                    "destination": {
+                        "node": "payment-service",
+                        "interfaces": [
+                            "payment-consumer"
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "unique-id": "inventory-service-connects-inventory-db",
+            "description": "Updates stock",
+            "dataClassification": "internal",
+            "relationship-type": {
+                "connects": {
+                    "source": {
+                        "node": "inventory-service",
+                        "interfaces": [
+                            "inventory-db-client"
+                        ]
+                    },
+                    "destination": {
+                        "node": "inventory-db",
+                        "interfaces": [
+                            "inventory-sql"
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "unique-id": "ecommerce-system-composition",
+            "description": "System Composition",
+            "relationship-type": {
+                "composed-of": {
+                    "container": "ecommerce-system",
+                    "nodes": [
+                        "load-balancer",
+                        "order-service",
+                        "inventory-service",
+                        "payment-service"
+                    ]
+                }
+            }
+        }
+    ]
+}

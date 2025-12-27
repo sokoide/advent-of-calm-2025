@@ -57,6 +57,7 @@ type Transition struct {
 }
 
 type Node struct {
+	arch        *Architecture       `json:"-"`
 	UniqueID    string              `json:"unique-id"`
 	NodeType    NodeType            `json:"node-type"`
 	Name        string              `json:"name"`
@@ -66,6 +67,11 @@ type Node struct {
 	Metadata    map[string]any      `json:"metadata,omitempty"`
 	Controls    map[string]*Control `json:"controls,omitempty"`
 	Interfaces  []Interface         `json:"interfaces,omitempty"`
+}
+
+// ConnectionBuilder helps construct relationships fluently
+type ConnectionBuilder struct {
+	rel *Relationship
 }
 
 type Interface struct {
