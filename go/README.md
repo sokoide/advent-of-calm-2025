@@ -17,7 +17,7 @@ While editing static JSON or YAML often feels like a chore, using a Go DSL trans
 - **Metadata Composition**: The `Merge` helper allows combining reusable metadata parts (e.g., Tier1, DBA, ManagedService) while detecting key collisions at runtime.
 - **Fluent Connection API**: Intuitive wiring via `node.ConnectTo(dest)` and structured relationship management using `LinksContainer`.
 - **Type-safe Flow Construction**: Reduced reliance on string IDs by using relationship objects or their `GetID()` method to define flow steps.
-- **Single Source of Truth for `owner`**: The `WithOwner` option automatically synchronizes the top-level `owner` field and `metadata["owner"]`, ensuring model consistency.
+- **Single Source of Truth for `owner`**: `WithOwner` sets only the top-level `owner` field and keeps metadata free of duplicated ownership to avoid drift.
 - **Dynamic Configuration**: Dependencies and flows are built dynamically from node slices (like `n.Gateways`), making it easy to change component counts or IDs.
 
 ## Benefits of "Architecture as Code" for Consistency and Maintainability
@@ -32,9 +32,11 @@ Using the Go DSL provides significant advantages over manual JSON editing, makin
 
 ### 1. Enforced Consistency through Single Source of Truth (SSoT)
 
-Manual JSONs often suffer from drift between top-level fields and metadata. The Go DSL enforces integrity at the code level.
+Manual JSONs often duplicate ownership across top-level fields and metadata, which makes drift easy. This DSL keeps `owner` as a single source of truth at the node level and avoids duplicating it in metadata. If a downstream tool requires `metadata["owner"]`, add it explicitly via `WithMeta` for that node.
 
-For example, the `WithOwner` option automatically synchronizes the top-level `owner` field and `metadata["owner"]`. This ensures high-quality models and leads to diffs that fix previously inconsistent entries:
+The reference JSON in this repository (`architectures/ecommerce-platform.json`) is kept in sync with the Go DSL output to maintain this standard.
+
+For example, if you choose to add `metadata["owner"]` for compatibility, the JSON diff looks like:
 
 ```diff
      {
@@ -46,8 +48,6 @@ For example, the `WithOwner` option automatically synchronizes the top-level `ow
        "owner": "marketing-team"
      }
 ```
-
-The reference JSON in this repository (`architectures/ecommerce-platform.json`) is kept perfectly in sync with the Go DSL output to maintain this high standard.
 
 ### 2. Dynamic Scaling and Automatic Consistency
 
@@ -67,7 +67,7 @@ By explicitly defining these decisions as constants in code, we gain significant
 
 ```go
 // 2025-12-27: Increased gateway count to 2 for high availability
-const numGateways = 2 
+const numGateways = 2
 ```
 
 ### 3. Eliminating Redundancy through Metadata Composition (DRY)
@@ -104,6 +104,34 @@ In our DSL implementation, the Order Flow and Inventory Flow intentionally use d
 - **Validating Wiring Coverage**: Ensures that every physical connection (relationship) is utilized by at least one flow, proving there are no "dead components" in the architecture.
 
 By separating "flow recipes" (steps) from "instances," the DSL automatically generates these sophisticated representations while maintaining perfect internal integrity.
+
+## Comparison: Manual JSON vs. Go DSL (Architecture as Code)
+
+We evaluate the transition from static JSON to a Go DSL through the lenses of maintainability and the joy of development.
+
+### 1. Maintainability and Reliability
+
+| Aspect | Standard CALM JSON (Manual) | Go-based DSL (Code) |
+| :--- | :--- | :--- |
+| **Scalability** | Adding a component requires dozens of manual updates. | Changing a single constant triggers automatic reconfiguration. |
+| **Consistency** | Redundant entries lead to drift and "model rot." | **SSoT** ensures one definition syncs everywhere automatically. |
+| **Deduplication** | Copy-pasting is the norm, leading to bloated files. | **Composition** allows merging reusable metadata parts safely. |
+| **Refactoring** | Relies on fragile string replacement (grep/sed). | IDEs rename safely; compilers catch broken references. |
+
+### 2. Developer Experience (DX) and "The Joy of Coding"
+
+| Aspect | Standard CALM JSON (Manual) | Go-based DSL (Code) |
+| :--- | :--- | :--- |
+| **Writing Flow** | A "chore" of managing brackets and commas. | A "flow" state powered by IDE auto-completion. |
+| **Feedback** | Errors only appear at runtime (slow). | Editors flag errors immediately (instant feedback). |
+| **Expressiveness** | Restricted to static declarations. | Use loops, conditionals, and functions to build intelligently. |
+| **Achievement** | A sigh of relief: "It's finally done." | A sense of pride: "I wrote a beautiful program." |
+
+### Summary: The Value of "Programming" Your Design
+
+Moving to a Go DSL is not just about building a generator—it is about **writing "Expressive Code" (the design) with the same passion as "Functional Code" (the implementation).**
+
+By freeing designers from the stress of manual integrity management and leveraging Go's expressive power to solve architectural puzzles, we transform system design into a creative development experience. This is the true essence of Architecture as Code.
 
 ## DSL Naming Conventions
 
