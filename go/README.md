@@ -111,21 +111,21 @@ We evaluate the transition from static JSON to a Go DSL through the lenses of ma
 
 ### 1. Maintainability and Reliability
 
-| Aspect | Standard CALM JSON (Manual) | Go-based DSL (Code) |
-| :--- | :--- | :--- |
-| **Scalability** | Adding a component requires dozens of manual updates. | Changing a single constant triggers automatic reconfiguration. |
-| **Consistency** | Redundant entries lead to drift and "model rot." | **SSoT** ensures one definition syncs everywhere automatically. |
-| **Deduplication** | Copy-pasting is the norm, leading to bloated files. | **Composition** allows merging reusable metadata parts safely. |
-| **Refactoring** | Relies on fragile string replacement (grep/sed). | IDEs rename safely; compilers catch broken references. |
+| Aspect            | Standard CALM JSON (Manual)                           | Go-based DSL (Code)                                             |
+| :---------------- | :---------------------------------------------------- | :-------------------------------------------------------------- |
+| **Scalability**   | Adding a component requires dozens of manual updates. | Changing a single constant triggers automatic reconfiguration.  |
+| **Consistency**   | Redundant entries lead to drift and "model rot."      | **SSoT** ensures one definition syncs everywhere automatically. |
+| **Deduplication** | Copy-pasting is the norm, leading to bloated files.   | **Composition** allows merging reusable metadata parts safely.  |
+| **Refactoring**   | Relies on fragile string replacement (grep/sed).      | IDEs rename safely; compilers catch broken references.          |
 
 ### 2. Developer Experience (DX) and "The Joy of Coding"
 
-| Aspect | Standard CALM JSON (Manual) | Go-based DSL (Code) |
-| :--- | :--- | :--- |
-| **Writing Flow** | A "chore" of managing brackets and commas. | A "flow" state powered by IDE auto-completion. |
-| **Feedback** | Errors only appear at runtime (slow). | Editors flag errors immediately (instant feedback). |
-| **Expressiveness** | Restricted to static declarations. | Use loops, conditionals, and functions to build intelligently. |
-| **Achievement** | A sigh of relief: "It's finally done." | A sense of pride: "I wrote a beautiful program." |
+| Aspect             | Standard CALM JSON (Manual)                | Go-based DSL (Code)                                            |
+| :----------------- | :----------------------------------------- | :------------------------------------------------------------- |
+| **Writing Flow**   | A "chore" of managing brackets and commas. | A "flow" state powered by IDE auto-completion.                 |
+| **Feedback**       | Errors only appear at runtime (slow).      | Editors flag errors immediately (instant feedback).            |
+| **Expressiveness** | Restricted to static declarations.         | Use loops, conditionals, and functions to build intelligently. |
+| **Achievement**    | A sigh of relief: "It's finally done."     | A sense of pride: "I wrote a beautiful program."               |
 
 ### Summary: The Value of "Programming" Your Design
 
@@ -135,25 +135,102 @@ By freeing designers from the stress of manual integrity management and leveragi
 
 ## DSL Naming Conventions
 
-| Prefix / Method | Role | Description | Example |
-| :--- | :--- | :--- | :--- |
-| **`New...`** | **Independent part generation** | Creates a standalone component with no parent. | `NewRequirement`, `NewSecurityConfig` |
-| **`Define...`** | **Declarative creation (Modern)** | Generates a highly configured object using Functional Options. | `arch.DefineNode()`, `arch.DefineFlow()` |
-| **`With...`** | **Option setting** | Configuration functions to be passed to `Define...` methods. | `WithOwner()`, `WithMeta()`, `WithControl()` |
-| **`ConnectTo`** | **Node-centric connection** | Initiates a connection from the node itself, returning a Builder. | `node.ConnectTo(dest)` |
-| **`Via` / `Is` / `Encrypted`** | **Attribute setting (Fluent)** | Fluently configures object properties. | `rel.Via("src", "dst").Encrypted(true)` |
-| **`Steps` / `MetaMap`** | **Bulk configuration** | Sets multiple attributes at once using lists or maps. | `fb.Steps(specs...)`, `fb.MetaMap(m)` |
-| **`Merge`** | **Metadata synthesis** | Combines multiple maps into one. Panics on key collisions. | `Merge(metaTier1, metaOps)` |
+| Prefix / Method                | Role                              | Description                                                       | Example                                      |
+| :----------------------------- | :-------------------------------- | :---------------------------------------------------------------- | :------------------------------------------- |
+| **`New...`**                   | **Independent part generation**   | Creates a standalone component with no parent.                    | `NewRequirement`, `NewSecurityConfig`        |
+| **`Define...`**                | **Declarative creation (Modern)** | Generates a highly configured object using Functional Options.    | `arch.DefineNode()`, `arch.DefineFlow()`     |
+| **`With...`**                  | **Option setting**                | Configuration functions to be passed to `Define...` methods.      | `WithOwner()`, `WithMeta()`, `WithControl()` |
+| **`ConnectTo`**                | **Node-centric connection**       | Initiates a connection from the node itself, returning a Builder. | `node.ConnectTo(dest)`                       |
+| **`Via` / `Is` / `Encrypted`** | **Attribute setting (Fluent)**    | Fluently configures object properties.                            | `rel.Via("src", "dst").Encrypted(true)`      |
+| **`Steps` / `MetaMap`**        | **Bulk configuration**            | Sets multiple attributes at once using lists or maps.             | `fb.Steps(specs...)`, `fb.MetaMap(m)`        |
+| **`Merge`**                    | **Metadata synthesis**            | Combines multiple maps into one. Panics on key collisions.        | `Merge(metaTier1, metaOps)`                  |
+
+## Developer Tools
+
+The DSL includes several tools to enhance your development experience.
+
+### Live Server (Hot Reload)
+
+Edit your Go files and watch the architecture diagram update automatically in your browser.
+
+```bash
+# Display with Mermaid diagrams
+make watch
+
+# Display with D2 diagrams (more beautiful rendering)
+make watch-d2
+```
+
+Open `http://localhost:3000` in your browser to see real-time updates.
+
+### D2 Diagram Generation
+
+Generate [D2](https://d2lang.com/) format diagrams.
+
+```bash
+make d2
+# → Generates architecture.d2 and architecture.svg
+```
+
+Install D2 CLI: `brew install d2`
+
+### Validation DSL
+
+Built-in rules automatically verify architecture quality.
+
+```bash
+make check
+# → ✅ All validation rules passed
+```
+
+**Built-in Rules:**
+
+- `AllNodesHaveOwner()` - All nodes have an owner set
+- `AllServicesHaveHealthEndpoint()` - Services have health-endpoint in metadata
+- `NoDanglingRelationships()` - No references to non-existent nodes
+- `AllFlowsHaveValidTransitions()` - Flow steps reference valid relationships
+- `AllDatabasesHaveBackupSchedule()` - Databases have backup-schedule in metadata
+- `AllTier1NodesHaveRunbook()` - Tier-1 nodes have runbook in metadata
+
+### Architecture Diff Tool
+
+Compare two CALM JSON files and display semantic differences with color-coded output.
+
+```bash
+make diff-arch
+```
+
+Displays:
+
+- 📦 Nodes: Added/Removed/Modified
+- 🔗 Relationships: Added/Removed
+- 🌊 Flows: Added/Removed
+- 🛡️ Controls: Added/Removed
 
 ## Usage
 
 ```bash
 # Format code (enforces 120 char limit)
-make -C go format
+make format
 
 # Validate against CALM schema
-make -C go validate
+make validate
+
+# Run Go DSL validation rules
+make check
 
 # Compare against the original reference JSON (success if no diff)
-make -C go diff
+make diff
+
+# Show semantic architecture diff
+make diff-arch
+
+# Generate D2 diagram
+make d2
+
+# Live server (Mermaid)
+make watch
+
+# Live server (D2)
+make watch-d2
 ```
