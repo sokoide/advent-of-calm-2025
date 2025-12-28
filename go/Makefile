@@ -1,20 +1,26 @@
-.PHONY: build format run validate diff difftool clean help setup
+.PHONY: build format run validate diff difftool clean help setup watch diff-arch d2 watch-d2 check
 
 # デフォルトターゲット
 help:
 	@echo "利用可能なコマンド:"
-	@echo "  make setup    - 必要なツール (golines) をインストールします"
-	@echo "  make build    - Go プログラムをビルドして実行ファイルを生成します"
-	@echo "  make format   - golines を使用してソースコードを整形します (120文字制限)"
-	@echo "  make run      - プログラムを実行してアーキテクチャ JSON を出力します"
-	@echo "  make validate - アーキテクチャを生成し、CALM バリデーションを実行します"
-	@echo "  make diff     - 既存の ecommerce-platform.json との差分を確認します"
-	@echo "  make difftool - 既存の ecommerce-platform.json との差分を目で確認します"
-	@echo "  make clean    - 生成されたバイナリや一時ファイルを削除します"
+	@echo "  make setup     - 必要なツール (golines) をインストールします"
+	@echo "  make build     - Go プログラムをビルドして実行ファイルを生成します"
+	@echo "  make format    - golines を使用してソースコードを整形します (120文字制限)"
+	@echo "  make run       - プログラムを実行してアーキテクチャ JSON を出力します"
+	@echo "  make validate  - アーキテクチャを生成し、CALM バリデーションを実行します"
+	@echo "  make check     - Go DSL のバリデーションルールを実行します"
+	@echo "  make diff      - 既存の ecommerce-platform.json との差分を確認します"
+	@echo "  make difftool  - 既存の ecommerce-platform.json との差分を目で確認します"
+	@echo "  make diff-arch - アーキテクチャの意味的な差分を表示します"
+	@echo "  make d2        - D2 ダイアグラムを生成します"
+	@echo "  make watch     - ライブサーバーを起動してブラウザで自動更新 (Mermaid)"
+	@echo "  make watch-d2  - ライブサーバーを起動してブラウザで自動更新 (D2)"
+	@echo "  make clean     - 生成されたバイナリや一時ファイルを削除します"
 
 # セットアップ: 必要なツールをインストール
 setup:
 	go install github.com/segmentio/golines@latest
+	@echo "D2のインストール: brew install d2"
 
 # ビルド: 実行ファイルを生成
 build:
@@ -35,6 +41,10 @@ validate:
 	calm validate -a generated-arch.json
 	@rm generated-arch.json
 
+# Go DSL バリデーション: 内蔵ルールを実行
+check:
+	@go run . -validate
+
 # 比較: 既存の ecommerce-platform.json との差分を確認
 diff:
 	@jq -S . ../architectures/ecommerce-platform.json > /tmp/expected.json
@@ -53,4 +63,26 @@ difftool:
 
 # クリーンアップ: 生成物を削除
 clean:
-	rm -f ../arch-gen generated-arch.json
+	rm -f ../arch-gen generated-arch.json architecture.d2
+
+# ライブサーバー: ファイル変更を監視してブラウザを自動更新 (Mermaid)
+watch:
+	@echo "🚀 Starting live server (Mermaid)..."
+	@cd cmd/watch && go run . ../..
+
+# アーキテクチャ差分: 意味的な差分を表示
+diff-arch:
+	@go run . > /tmp/new-arch.json
+	@cd cmd/diff && go run . ../../../architectures/ecommerce-platform.json /tmp/new-arch.json
+
+# D2 ダイアグラム生成
+d2:
+	@go run . -format d2 > architecture.d2
+	@echo "✅ Generated architecture.d2"
+	@command -v d2 >/dev/null 2>&1 && d2 architecture.d2 architecture.svg && echo "✅ Generated architecture.svg" || echo "💡 Install d2 to generate SVG: brew install d2"
+
+# D2 ライブサーバー: ファイル変更を監視してD2ダイアグラムを自動更新
+watch-d2:
+	@echo "🚀 Starting D2 live server..."
+	@command -v d2 >/dev/null 2>&1 || (echo "❌ d2 が見つかりません。brew install d2 を実行してください。" && exit 1)
+	@cd cmd/watch && go run . -d2 ../..

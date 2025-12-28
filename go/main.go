@@ -1,10 +1,18 @@
 package main
 
-import "fmt"
+import (
+	"flag"
+	"fmt"
+	"os"
+)
 
 const numGateways = 2
 
 func main() {
+	outputFormat := flag.String("format", "json", "Output format: json, d2")
+	runValidation := flag.Bool("validate", false, "Run validation rules")
+	flag.Parse()
+
 	arch := NewArchitecture(
 		"ecommerce-platform-architecture",
 		"E-Commerce Order Processing Platform",
@@ -18,7 +26,21 @@ func main() {
 	links := wireComponents(arch, nodes)
 	defineFlows(arch, nodes, links)
 
-	fmt.Println(arch.ToJSON())
+	// Run validation if requested
+	if *runValidation {
+		if !arch.ValidateAndReport(DefaultValidationRules()...) {
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Output based on format
+	switch *outputFormat {
+	case "d2":
+		fmt.Println(arch.ToD2())
+	default:
+		fmt.Println(arch.ToJSON())
+	}
 }
 
 // --- Metadata Parts ---
