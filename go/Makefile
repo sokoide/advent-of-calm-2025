@@ -1,4 +1,4 @@
-.PHONY: build format run validate diff difftool clean help setup watch diff-arch d2 watch-d2 check
+.PHONY: build format run validate diff difftool clean help setup watch diff-arch d2 watch-d2 check studio
 
 # デフォルトターゲット
 help:
@@ -15,6 +15,7 @@ help:
 	@echo "  make d2        - D2 ダイアグラムを生成します"
 	@echo "  make watch     - ライブサーバーを起動してブラウザで自動更新 (Mermaid)"
 	@echo "  make watch-d2  - ライブサーバーを起動してブラウザで自動更新 (D2)"
+	@echo "  make studio    - CALM Studio (双方向エディタ) を起動します"
 	@echo "  make clean     - 生成されたバイナリや一時ファイルを削除します"
 
 # セットアップ: 必要なツールをインストール
@@ -86,3 +87,9 @@ watch-d2:
 	@echo "🚀 Starting D2 live server..."
 	@command -v d2 >/dev/null 2>&1 || (echo "❌ d2 が見つかりません。brew install d2 を実行してください。" && exit 1)
 	@cd cmd/watch && go run . -d2 ../..
+
+# CALM Studio: 双方向エディタ (Go DSL ↔ D2)
+studio:
+	@echo "🎨 Starting CALM Studio..."
+	@command -v d2 >/dev/null 2>&1 || (echo "❌ d2 が見つかりません。brew install d2 を実行してください。" && exit 1)
+	@cd cmd/studio && go run . ../..

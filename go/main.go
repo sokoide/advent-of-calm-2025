@@ -38,6 +38,8 @@ func main() {
 	switch *outputFormat {
 	case "d2":
 		fmt.Println(arch.ToD2())
+	case "rich-d2":
+		fmt.Println(arch.ToRichD2())
 	default:
 		fmt.Println(arch.ToJSON())
 	}
