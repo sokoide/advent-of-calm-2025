@@ -25,11 +25,11 @@ func (EcommerceBuilder) Build() *domain.Architecture {
 	nodes := defineNodes(arch)
 	links := wireComponents(arch, nodes)
 	defineFlows(arch, nodes, links)
+	arch.DefineNode("api-gateway-1", domain.Service, "API Gateway Instance 1", "Primary API Gateway instance.")
+	arch.DefineNode("api-gateway-2", domain.Service, "API Gateway Instance 2", "Secondary API Gateway instance for high availability.")
 
 	return arch
 }
-
-// --- Metadata Parts ---
 
 var (
 	metaTier1 = map[string]any{"tier": "tier-1", "business-criticality": "high"}
@@ -124,17 +124,13 @@ func addGlobalControls(a *domain.Architecture) {
 func defineNodes(a *domain.Architecture) *nodesContainer {
 	nc := &nodesContainer{}
 
-	nc.Customer = a.DefineNode("customer", domain.Actor, "Customer", "A user who browses and purchases products.",
-		domain.WithOwner("marketing-team", "CC-1000"))
+	nc.Customer = a.DefineNode("customer", domain.Actor, "Customer", "A user who browses and purchases products.", domain.WithOwner("marketing-team", "CC-1000"))
 
-	nc.Admin = a.DefineNode("admin", domain.Actor, "Admin", "A staff member who manages products and orders.",
-		domain.WithOwner("ops-team", "CC-1000"))
+	nc.Admin = a.DefineNode("admin", domain.Actor, "Admin", "A staff member who manages products and orders.", domain.WithOwner("ops-team", "CC-1000"))
 
-	nc.System = a.DefineNode("ecommerce-system", domain.System, "A-Commerce Platform", "The overall e-commerce system containing microservices.",
-		domain.WithOwner("platform-team", "CC-2000"))
+	nc.System = a.DefineNode("ecommerce-system", domain.System, "AAA-Commerce Platform", "The overall e-commerce system containing microservices.", domain.WithOwner("platform-team", "CC-2000"))
 
-	nc.LB = a.DefineNode("load-balancer", domain.Service, "Load Balancer", "High-availability entry point that distributes traffic to API Gateways.",
-		domain.WithOwner("platform-team", "CC-2000"),
+	nc.LB = a.DefineNode("load-balancer", domain.Service, "Load Balancer", "High-availability entry point that distributes traffic to API Gateways.", domain.WithOwner("platform-team", "CC-2000"),
 		domain.WithMeta(domain.Merge(metaTier1, metaOpsPlatform, metaManagedSvc, map[string]any{
 			"tech-owner":      "Network Team",
 			"ha-enabled":      true,
@@ -183,8 +179,7 @@ func defineNodes(a *domain.Architecture) *nodesContainer {
 		{"check": "Verify inventory-service cache TTL and database replication lag", "escalation": "Contact platform-team for cache issues", "likely-cause": "Inventory service returning stale data", "remediation": "Clear inventory cache; check replica sync status", "symptom": "Order validation failures"},
 	}
 
-	nc.OrderSvc = a.DefineNode("order-service", domain.Service, "Order Service", "Handles order creation and lifecycle management.",
-		domain.WithOwner("orders-team", "CC-3000"),
+	nc.OrderSvc = a.DefineNode("order-service", domain.Service, "Order Service", "Handles order creation and lifecycle management.", domain.WithOwner("orders-team", "CC-3000"),
 		domain.WithMeta(domain.Merge(metaTier1, metaOpsOrders, metaContainer, map[string]any{
 			"tech-owner":      "Order Team",
 			"health-endpoint": "/actuator/health",
@@ -205,8 +200,7 @@ func defineNodes(a *domain.Architecture) *nodesContainer {
 	nc.OrderSvc.Interface("order-inventory-client", "REST").SetDesc("Outbound connection to check inventory")
 	nc.OrderSvc.Interface("order-health", "HTTP").SetName("Health Check").SetPath("/health")
 
-	nc.InventorySvc = a.DefineNode("inventory-service", domain.Service, "Inventory Service", "Manages product stock levels.",
-		domain.WithOwner("inventory-team", "CC-4000"),
+	nc.InventorySvc = a.DefineNode("inventory-service", domain.Service, "Inventory Service", "Manages product stock levels.", domain.WithOwner("inventory-team", "CC-4000"),
 		domain.WithMeta(domain.Merge(metaTier2, metaOpsInv, metaContainer, map[string]any{
 			"tech-owner":      "Warehouse Team",
 			"health-endpoint": "/health",
@@ -224,8 +218,7 @@ func defineNodes(a *domain.Architecture) *nodesContainer {
 	nc.InventorySvc.Interface("inventory-db-client", "JDBC")
 	nc.InventorySvc.Interface("inventory-health", "HTTP").SetName("Health Check").SetPath("/health")
 
-	nc.PaymentSvc = a.DefineNode("payment-service", domain.Service, "Payment Service", "Integrates with external payment providers.",
-		domain.WithOwner("payments-team", "CC-5000"),
+	nc.PaymentSvc = a.DefineNode("payment-service", domain.Service, "Payment Service", "Integrates with external payment providers.", domain.WithOwner("payments-team", "CC-5000"),
 		domain.WithMeta(domain.Merge(metaTier1, metaOpsPayments, map[string]any{
 			"deployment-type": "serverless",
 			"tech-owner":      "Payment Team",
@@ -246,8 +239,7 @@ func defineNodes(a *domain.Architecture) *nodesContainer {
 	nc.PaymentSvc.Interface("payment-consumer", "AMQP").SetDesc("Consumes order messages for payment processing.")
 	nc.PaymentSvc.Interface("payment-health", "HTTP").SetName("Health Check").SetPath("/health")
 
-	nc.Broker = a.DefineNode("message-broker", domain.System, "Message Broker (RabbitMQ)", "Central messaging system for failure isolation and async processing.",
-		domain.WithOwner("platform-team", "CC-2000"),
+	nc.Broker = a.DefineNode("message-broker", domain.System, "Message Broker (RabbitMQ)", "Central messaging system for failure isolation and async processing.", domain.WithOwner("platform-team", "CC-2000"),
 		domain.WithMeta(domain.Merge(metaOpsPlatform, metaManagedSvc, map[string]any{
 			"tech-owner":      "Platform Team",
 			"tier":            "tier-1",
@@ -260,24 +252,19 @@ func defineNodes(a *domain.Architecture) *nodesContainer {
 		})))
 	nc.Broker.Interface("amqp-port", "AMQP").SetPort(5672)
 
-	nc.OrderQueue = a.DefineNode("order-queue", domain.Queue, "Order Payment Queue", "Buffer for orders awaiting payment processing.",
-		domain.WithOwner("orders-team", "CC-3000"))
+	nc.OrderQueue = a.DefineNode("order-queue", domain.Queue, "Order Payment Queue", "Buffer for orders awaiting payment processing.", domain.WithOwner("orders-team", "CC-3000"))
 
-	nc.DBCluster = a.DefineNode("order-database-cluster", domain.System, "Order Database Cluster", "High-availability database cluster for order data.",
-		domain.WithOwner("dba-team", "CC-3000"),
+	nc.DBCluster = a.DefineNode("order-database-cluster", domain.System, "Order Database Cluster", "High-availability database cluster for order data.", domain.WithOwner("dba-team", "CC-3000"),
 		domain.WithControl("failover", "Disaster recovery and failover targets", domain.NewRequirement("https://internal-policy.example.com/resilience/disaster-recovery-targets", domain.NewFailoverConfig(15, 5, true))),
 	)
 
-	nc.OrderPrimary = a.DefineNode("order-database-primary", domain.Database, "Order Database (Primary)", "Main writable database for orders.",
-		domain.WithOwner("dba-team", "CC-3000"), domain.WithMeta(domain.Merge(metaDBA, metaManagedSvc, map[string]any{"backup-schedule": "daily at 02:00 UTC", "restore-time": "60 minutes", "data-classification": "PII", "replication-mode": "async", "role": "primary"})))
+	nc.OrderPrimary = a.DefineNode("order-database-primary", domain.Database, "Order Database (Primary)", "Main writable database for orders.", domain.WithOwner("dba-team", "CC-3000"), domain.WithMeta(domain.Merge(metaDBA, metaManagedSvc, map[string]any{"backup-schedule": "daily at 02:00 UTC", "restore-time": "60 minutes", "data-classification": "PII", "replication-mode": "async", "role": "primary"})))
 	nc.OrderPrimary.Interface("order-sql-primary", "JDBC").SetPort(5432).SetDB("orders_v1").SetHost("orders-primary.example.com")
 
-	nc.OrderReplica = a.DefineNode("order-database-replica", domain.Database, "Order Database (Replica)", "Read-only replica for scaling read operations.",
-		domain.WithOwner("dba-team", "CC-3000"), domain.WithMeta(domain.Merge(metaDBA, metaManagedSvc, map[string]any{"backup-schedule": "daily at 02:00 UTC", "restore-time": "60 minutes", "data-classification": "PII", "replication-mode": "async", "role": "replica"})))
+	nc.OrderReplica = a.DefineNode("order-database-replica", domain.Database, "Order Database (Replica)", "Read-only replica for scaling read operations.", domain.WithOwner("dba-team", "CC-3000"), domain.WithMeta(domain.Merge(metaDBA, metaManagedSvc, map[string]any{"backup-schedule": "daily at 02:00 UTC", "restore-time": "60 minutes", "data-classification": "PII", "replication-mode": "async", "role": "replica"})))
 	nc.OrderReplica.Interface("order-sql-replica", "JDBC").SetPort(5432).SetDB("orders_v1").SetHost("orders-replica.example.com")
 
-	nc.InventoryDB = a.DefineNode("inventory-db", domain.Database, "Inventory Database", "Stores stock levels.",
-		domain.WithOwner("dba-team", "CC-4000"), domain.WithMeta(domain.Merge(metaDBA, metaManagedSvc, map[string]any{"backup-schedule": "weekly at Sunday 03:00 UTC", "restore-time": "30 minutes"})))
+	nc.InventoryDB = a.DefineNode("inventory-db", domain.Database, "Inventory Database", "Stores stock levels.", domain.WithOwner("dba-team", "CC-4000"), domain.WithMeta(domain.Merge(metaDBA, metaManagedSvc, map[string]any{"backup-schedule": "weekly at Sunday 03:00 UTC", "restore-time": "30 minutes"})))
 	nc.InventoryDB.Interface("inventory-sql", "JDBC").SetPort(5432).SetDB("inventory_v1").SetHost("inventory-db.example.com")
 
 	// Dynamic dependencies

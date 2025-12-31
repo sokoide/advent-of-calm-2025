@@ -109,7 +109,11 @@ watch-d2:
 	@cd cmd/watch && go run . -d2 ../..
 
 # CALM Studio: 双方向エディタ (Go DSL ↔ D2)
-studio:
+studio: cmd/studio/frontend/dist
 	@echo "🎨 Starting CALM Studio..."
 	@command -v d2 >/dev/null 2>&1 || (echo "❌ d2 が見つかりません。brew install d2 を実行してください。" && exit 1)
 	@cd cmd/studio && go run . ../..
+
+cmd/studio/frontend/dist: cmd/studio/frontend/src/App.tsx
+	@echo "📦 Building frontend..."
+	@cd cmd/studio/frontend && npm install && npm run build

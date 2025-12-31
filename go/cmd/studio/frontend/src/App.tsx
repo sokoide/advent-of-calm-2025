@@ -15,8 +15,9 @@ import {
   Columns, 
   RefreshCw,
   CheckCircle2,
-  Play,
-  Save
+  Save,
+  Layers,
+  FileCode
 } from 'lucide-react';
 import * as Resizable from 'react-resizable-panels';
 
@@ -29,14 +30,14 @@ import CodeEditor from './components/CodeEditor';
 
 const BASE_URL = window.location.origin;
 
-type TabType = 'diagram' | 'go' | 'd2' | 'merged';
+type TabType = 'merged' | 'diagram' | 'go' | 'json' | 'd2-diagram' | 'd2-dsl';
 
 function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [loading, setLoading] = useState(true);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
-  const [activeTab, setActiveTab] = useState<TabType>('diagram');
+  const [activeTab, setActiveTab] = useState<TabType>('merged');
 
   // Clear selection when tab changes
   useEffect(() => {
@@ -48,7 +49,11 @@ function App() {
   // Content states
   const [goCode, setGoCode] = useState('');
   const [d2Code, setD2Code] = useState('');
+  const [jsonCode, setJsonCode] = useState('');
+  const [svgCode, setSvgCode] = useState('');
   const [archId, setArchId] = useState('');
+  const [showDiff, setShowDiff] = useState(false);
+  const [previewCode, setPreviewCode] = useState('');
 
   // Flag to avoid re-fetching while we are typing
   const isUpdating = useRef(false);
@@ -77,15 +82,24 @@ function App() {
     if (isUpdating.current && !isWSUpdate) return;
     try {
       const contentResp = await axios.get(`${BASE_URL}/content`);
-      const { goCode: remoteGo, d2Code: remoteD2, json } = contentResp.data;
-      const arch: CalmArchitecture = JSON.parse(json);
-      const id = arch['unique-id'];
+      const { goCode: remoteGo, d2Code: remoteD2, json, svg } = contentResp.data;
       
       setGoCode(remoteGo);
       setD2Code(remoteD2);
-      setArchId(id);
+      setSvgCode(svg);
 
-      const layoutResp = await axios.get(`${BASE_URL}/layout?id=${id}`);
+      if (!json || json === "" || json === "null" || json === "{}") {
+        console.log("⚠️ JSON is empty, showing code only");
+        setLoading(false);
+        return;
+      }
+
+      const arch: CalmArchitecture = JSON.parse(json);
+      const archUniqueID = arch['unique-id'];
+      setJsonCode(JSON.stringify(arch, null, 2));
+      setArchId(archUniqueID);
+
+      const layoutResp = await axios.get(`${BASE_URL}/layout?id=${archUniqueID}`);
       const layout: LayoutData = layoutResp.data;
 
       const { nodes: initialNodes, edges: initialEdges } = transformToReactFlow(arch, layout);
@@ -115,8 +129,8 @@ function App() {
     const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
     
     socket.onmessage = (event) => {
-      if (event.data === 'refresh') {
-        console.log('🔄 Remote change detected, refreshing...');
+      if (event.data === 'refresh' || event.data === 'refresh-svg') {
+        console.log(`🔄 Remote change detected (${event.data}), refreshing...`);
         fetchData(true);
       }
     };
@@ -187,21 +201,34 @@ function App() {
     setTimeout(() => { isUpdating.current = false; }, 1000);
   };
 
-  const handleApplyD2 = async () => {
+  const handleApplyJSON = async () => {
     try {
-      const resp = await axios.post(`${BASE_URL}/d2-to-go`, { d2Code });
-      if (resp.data.success) {
-        alert('Applied to Go DSL!');
-        fetchData(true);
+      const resp = await axios.post(`${BASE_URL}/preview-json-sync`, { json: jsonCode });
+      if (resp.data.error) {
+        alert('Validation Error: ' + resp.data.error);
+        return;
       }
+      setPreviewCode(resp.data.newCode);
+      setShowDiff(true);
     } catch (err) {
-      alert('Failed to apply D2 changes');
+      alert('Failed to generate preview');
     }
   };
 
-  const handlePreviewD2 = () => {
-    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      ws.current.send(JSON.stringify({ type: 'd2', content: d2Code }));
+  const confirmApply = async () => {
+    try {
+      isUpdating.current = true;
+      await axios.post(`${BASE_URL}/update`, { type: 'go', content: previewCode });
+      setShowDiff(false);
+      // Wait a bit for file watcher to potentially trigger, then fetch
+      setTimeout(async () => {
+        await fetchData(true);
+        isUpdating.current = false;
+        alert('Applied to Go DSL!');
+      }, 500);
+    } catch (err) {
+      isUpdating.current = false;
+      alert('Failed to apply changes');
     }
   };
 
@@ -239,10 +266,12 @@ function App() {
           </h1>
           <nav className="flex bg-slate-800/50 rounded-lg p-1 border border-slate-700">
             {[
+              { id: 'merged', label: 'Merged', icon: Columns },
               { id: 'diagram', label: 'Diagram', icon: Monitor },
               { id: 'go', label: 'Go DSL', icon: Code2 },
-              { id: 'd2', label: 'D2 Source', icon: FileJson },
-              { id: 'merged', label: 'Merged', icon: Columns },
+              { id: 'json', label: 'CALM JSON', icon: FileJson },
+              { id: 'd2-diagram', label: 'D2 Diagram', icon: Layers },
+              { id: 'd2-dsl', label: 'D2 DSL', icon: FileCode },
             ].map((t) => (
               <button
                 key={t.id}
@@ -268,28 +297,6 @@ function App() {
       </header>
 
       <main className="flex-1 overflow-hidden relative">
-        {activeTab === 'diagram' && renderDiagram()}
-        
-        {activeTab === 'go' && (
-          <CodeEditor value={goCode} language="go" onChange={handleGoCodeChange} />
-        )}
-
-        {activeTab === 'd2' && (
-          <div className="flex flex-col h-full">
-            <div className="bg-slate-900 px-4 py-2 flex gap-3 border-b border-slate-800 shadow-sm">
-              <button onClick={handlePreviewD2} className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs font-medium border border-slate-700 transition-colors">
-                <Play size={12} /> Preview Diagram
-              </button>
-              <button onClick={handleApplyD2} className="flex items-center gap-2 px-3 py-1.5 bg-green-700 hover:bg-green-600 rounded text-xs font-medium text-white shadow-md transition-colors">
-                <Save size={12} /> Apply to Go DSL
-              </button>
-            </div>
-            <div className="flex-1">
-              <CodeEditor value={d2Code} language="yaml" onChange={(val) => setD2Code(val || '')} />
-            </div>
-          </div>
-        )}
-
         {activeTab === 'merged' && (
           <Resizable.Group orientation="horizontal" className="h-full">
             <Resizable.Panel defaultSize={40} minSize={25}>
@@ -309,12 +316,99 @@ function App() {
           </Resizable.Group>
         )}
 
+        {activeTab === 'diagram' && renderDiagram()}
+        
+        {activeTab === 'go' && (
+          <CodeEditor value={goCode} language="go" onChange={handleGoCodeChange} />
+        )}
+
+        {activeTab === 'json' && (
+          <div className="flex flex-col h-full">
+            <div className="bg-slate-900 px-4 py-2 flex gap-3 border-b border-slate-800 shadow-sm">
+              <button onClick={() => alert('Validation not implemented yet')} className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs font-medium border border-slate-700 transition-colors">
+                <CheckCircle2 size={12} /> Validate JSON
+              </button>
+              <button onClick={handleApplyJSON} className="flex items-center gap-2 px-3 py-1.5 bg-green-700 hover:bg-green-600 rounded text-xs font-medium text-white shadow-md transition-colors">
+                <Save size={12} /> Apply to Go DSL
+              </button>
+            </div>
+            <div className="flex-1">
+              <CodeEditor value={jsonCode} language="json" onChange={(val) => setJsonCode(val || '')} />
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'd2-diagram' && (
+          <div className="flex flex-col h-full bg-slate-900 overflow-hidden">
+            <div className="flex-1 overflow-auto bg-slate-800 p-8 flex items-start justify-center">
+              {svgCode ? (
+                <div 
+                  className="bg-white rounded-xl shadow-2xl p-8"
+                  style={{ minWidth: '800px' }}
+                  dangerouslySetInnerHTML={{ __html: svgCode.replace('<svg ', '<svg style="width:100%;height:auto;" ') }} 
+                />
+              ) : (
+                <div className="flex flex-col h-full items-center justify-center text-slate-500">
+                  <RefreshCw className="animate-spin mb-4" size={32} />
+                  <p className="text-lg">Generating High-Fidelity D2 Diagram...</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'd2-dsl' && (
+          <div className="flex flex-col h-full">
+            <div className="bg-slate-900 px-4 py-2 flex gap-3 border-b border-slate-800 shadow-sm text-xs text-slate-500 font-medium">
+              Read-only D2 Source
+            </div>
+            <div className="flex-1">
+              <CodeEditor value={d2Code} language="yaml" onChange={() => {}} />
+            </div>
+          </div>
+        )}
+
         <Sidebar 
           selectedNode={selectedNode}
           onUpdate={onUpdateNode}
           onDelete={onDeleteNode}
           onClose={() => setSelectedNode(null)}
         />
+
+        {showDiff && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-10">
+            <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-5xl h-full max-h-[90vh] flex flex-col overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+                <h3 className="text-lg font-bold text-blue-400 flex items-center gap-2">
+                  <RefreshCw size={20} /> Preview Changes (Go DSL)
+                </h3>
+                <button 
+                  onClick={() => setShowDiff(false)}
+                  className="text-slate-400 hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="flex-1 overflow-hidden p-4">
+                <CodeEditor value={previewCode} language="go" onChange={() => {}} />
+              </div>
+              <div className="px-6 py-4 bg-slate-950 border-t border-slate-800 flex justify-end gap-4">
+                <button 
+                  onClick={() => setShowDiff(false)}
+                  className="px-6 py-2 rounded-md border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={confirmApply}
+                  className="px-8 py-2 bg-green-600 hover:bg-green-500 text-white rounded-md font-bold shadow-lg transition-all active:scale-95"
+                >
+                  Apply Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

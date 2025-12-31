@@ -2,6 +2,8 @@ package render
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/sokoide/advent-of-calm-2025/internal/domain"
@@ -124,6 +126,39 @@ func (D2Renderer) Render(a *domain.Architecture) (string, error) {
 	}
 
 	return sb.String(), nil
+}
+
+// RenderSVG generates SVG from the architecture using the d2 CLI.
+func (r D2Renderer) RenderSVG(a *domain.Architecture) (string, error) {
+	d2Source, err := r.Render(a)
+	if err != nil {
+		return "", err
+	}
+
+	// Create a temporary file for D2 source
+	tmpFile, err := os.CreateTemp("", "calm-*.d2")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	if _, err := tmpFile.WriteString(d2Source); err != nil {
+		return "", fmt.Errorf("failed to write to temp file: %w", err)
+	}
+	tmpFile.Close()
+
+	// Execute d2 CLI to generate SVG to stdout
+	cmd := exec.Command("d2", "-", "-")
+	cmd.Stdin = strings.NewReader(d2Source)
+	output, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return "", fmt.Errorf("d2 execution failed: %s", string(exitErr.Stderr))
+		}
+		return "", fmt.Errorf("d2 execution failed: %w", err)
+	}
+
+	return string(output), nil
 }
 
 func writeNode(sb *strings.Builder, node *domain.Node, indent string) {

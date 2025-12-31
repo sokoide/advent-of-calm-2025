@@ -18,6 +18,8 @@ go/ ディレクトリ以下はGo-D2の双方向CALMエディタです。CALM（
 
 ## 4. Key Features
 - **WYSIWYG 編集とマルチモード同期 (Go <-> React Flow)**: 図面上の直感的な操作とコード編集を、マルチタブや分割表示（Merged View）でシームレスに同期。
+- **マルチフォーマット・ビューア**: CALM JSON, D2 DSL, および D2エンジンによる高精細な図面表示に対応。
+- **安全な逆変換 (JSON -> Go DSL)**: CALM JSON の編集内容を、AST解析と Diff 確認を経て安全に Go ソースコードへ反映。
 - **マルチ出力サポート**: 単一のGo DSLから、CALM JSON、D2、Mermaid、Markdownを一括生成。
 - **カスタムバリデーション・エンジン**: プロジェクト固有の規約を自動検証する仕組み。
 
