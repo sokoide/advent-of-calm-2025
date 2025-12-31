@@ -73,17 +73,13 @@ func generateNodeDSL(sb *strings.Builder, node *domain.Node) {
 	nodeType = caser.String(strings.ToLower(nodeType))
 
 	sb.WriteString(fmt.Sprintf("\tarch.DefineNode(\n"))
-	sb.WriteString(fmt.Sprintf("\t\t%q, %s, %q,\n", node.UniqueID, nodeType, node.Name))
+	sb.WriteString(fmt.Sprintf("\t\t%q, %s, %q, %q,\n", node.UniqueID, nodeType, node.Name, node.Description))
 
 	// Options
 	if node.Owner != "" {
-		sb.WriteString(fmt.Sprintf("\t\tWithOwner(%q),\n", node.Owner))
-	}
-	if node.CostCenter != "" {
+		sb.WriteString(fmt.Sprintf("\t\tWithOwner(%q, %q),\n", node.Owner, node.CostCenter))
+	} else if node.CostCenter != "" {
 		sb.WriteString(fmt.Sprintf("\t\tWithCostCenter(%q),\n", node.CostCenter))
-	}
-	if node.Description != "" {
-		sb.WriteString(fmt.Sprintf("\t\tWithDescription(%q),\n", node.Description))
 	}
 
 	// Metadata
@@ -116,6 +112,15 @@ func generateInterfaceDSL(sb *strings.Builder, iface domain.Interface) {
 	}
 	if iface.Host != "" {
 		sb.WriteString(fmt.Sprintf(", Host: %q", iface.Host))
+	}
+	if iface.Path != "" {
+		sb.WriteString(fmt.Sprintf(", Path: %q", iface.Path))
+	}
+	if iface.Description != "" {
+		sb.WriteString(fmt.Sprintf(", Description: %q", iface.Description))
+	}
+	if iface.Database != "" {
+		sb.WriteString(fmt.Sprintf(", Database: %q", iface.Database))
 	}
 	sb.WriteString("},\n")
 }
@@ -192,24 +197,42 @@ func generateRelDSL(sb *strings.Builder, rel *domain.Relationship) {
 }
 
 func generateFlowDSL(sb *strings.Builder, flow *domain.Flow) {
-	sb.WriteString(fmt.Sprintf("\tarch.DefineFlow(%q, %q,\n", flow.UniqueID, flow.Name))
-	sb.WriteString(fmt.Sprintf("\t\tWithFlowDescription(%q),\n", flow.Description))
+	sb.WriteString(fmt.Sprintf("\tarch.DefineFlow(%q, %q, %q)", flow.UniqueID, flow.Name, flow.Description))
 
-	for _, t := range flow.Transitions {
-		sb.WriteString(fmt.Sprintf("\t\tWithStep(%d, %q, %q, %q),\n",
-			t.SequenceNumber, t.RelationshipID, t.Direction, t.Description))
+	if len(flow.Metadata) > 0 {
+		sb.WriteString(fmt.Sprintf(".MetaMap(%s)", formatValue(flow.Metadata)))
 	}
 
-	sb.WriteString("\t)\n\n")
+	transitions := append([]domain.Transition(nil), flow.Transitions...)
+	sort.Slice(transitions, func(i, j int) bool {
+		return transitions[i].SequenceNumber < transitions[j].SequenceNumber
+	})
+
+	for _, t := range transitions {
+		if t.Direction != "" && t.Direction != "source-to-destination" {
+			sb.WriteString(fmt.Sprintf(".StepEx(%q, %q, %q)", t.RelationshipID, t.Description, t.Direction))
+		} else {
+			sb.WriteString(fmt.Sprintf(".Step(%q, %q)", t.RelationshipID, t.Description))
+		}
+	}
+
+	sb.WriteString("\n\n")
 }
 
 func generateControlDSL(sb *strings.Builder, id string, ctrl *domain.Control) {
 	sb.WriteString(fmt.Sprintf("\tarch.Controls[%q] = &Control{\n", id))
 	sb.WriteString(fmt.Sprintf("\t\tDescription: %q,\n", ctrl.Description))
 	if len(ctrl.Requirements) > 0 {
-		sb.WriteString("\t\tRequirements: []*Requirement{\n")
+		sb.WriteString("\t\tRequirements: []Requirement{\n")
 		for _, req := range ctrl.Requirements {
-			sb.WriteString(fmt.Sprintf("\t\t\t{RequirementURL: %q},\n", req.RequirementURL))
+			fields := []string{fmt.Sprintf("RequirementURL: %q", req.RequirementURL)}
+			if req.Config != nil {
+				fields = append(fields, fmt.Sprintf("Config: %s", formatValue(req.Config)))
+			}
+			if req.ConfigURL != "" {
+				fields = append(fields, fmt.Sprintf("ConfigURL: %q", req.ConfigURL))
+			}
+			sb.WriteString(fmt.Sprintf("\t\t\t{%s},\n", strings.Join(fields, ", ")))
 		}
 		sb.WriteString("\t\t},\n")
 	}

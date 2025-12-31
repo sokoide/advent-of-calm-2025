@@ -139,6 +139,11 @@ func (a *Architecture) ComposedOf(id, desc, container string, nodes []string) *R
 	return r
 }
 
+// AddRelationship appends a fully-defined relationship to the architecture.
+func (a *Architecture) AddRelationship(rel *Relationship) {
+	a.Relationships = append(a.Relationships, rel)
+}
+
 // --- Flows ---
 func (a *Architecture) Flow(id, name, desc string) *Flow {
 	f := &Flow{UniqueID: id, Name: name, Description: desc, Metadata: make(map[string]any)}

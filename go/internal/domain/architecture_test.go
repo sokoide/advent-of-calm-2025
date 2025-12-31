@@ -35,8 +35,8 @@ func TestArchitecture_DefineNode(t *testing.T) {
 	t.Run("should apply functional options", func(t *testing.T) {
 		owner := "team-a"
 		cc := "cc-123"
-		
-		node := arch.DefineNode("opt-node", Service, "Opt Node", "desc", 
+
+		node := arch.DefineNode("opt-node", Service, "Opt Node", "desc",
 			WithOwner(owner, cc),
 			WithTags("tag1", "tag2"),
 		)
@@ -47,7 +47,7 @@ func TestArchitecture_DefineNode(t *testing.T) {
 		if node.CostCenter != cc {
 			t.Errorf("expected CostCenter %s, got %s", cc, node.CostCenter)
 		}
-		
+
 		// Check metadata sync
 		if node.Metadata["owner"] != owner {
 			t.Errorf("expected metadata['owner'] %s, got %s", owner, node.Metadata["owner"])

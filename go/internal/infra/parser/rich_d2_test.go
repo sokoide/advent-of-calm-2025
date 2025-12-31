@@ -145,7 +145,7 @@ order-service -> inventory-db {
 	t.Run("should parse flows with metadata", func(t *testing.T) {
 		d2 := `
 # @calm:flow id=order-flow name=Order Processing Flow
-# @calm:metadata={"critical": true}
+# @calm:flow-metadata={"critical": true}
 # @calm:flow-step seq=1 rel=rel1 dir=src-to-dst desc=Step 1
 `
 		arch, err := ParseRichD2(d2)

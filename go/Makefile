@@ -1,4 +1,4 @@
-.PHONY: build format run validate diff difftool clean help setup watch diff-arch d2 watch-d2 check studio
+.PHONY: build format run validate diff difftool clean help setup watch diff-arch d2 watch-d2 check studio test test-coverage testcoverage
 
 # デフォルトターゲット
 help:
@@ -11,6 +11,7 @@ help:
 	@echo "  make check     - Go DSL のバリデーションルールを実行します"
 	@echo "  make test      - ユニットテストを実行します"
 	@echo "  make test-coverage - テストカバレッジを確認します"
+	@echo "  make testcoverage - パッケージごとのテストカバレッジを表示します"
 	@echo "  make diff      - 既存の ecommerce-platform.json との差分を確認します"
 	@echo "  make difftool  - 既存の ecommerce-platform.json との差分を目で確認します"
 	@echo "  make diff-arch - アーキテクチャの意味的な差分を表示します"
@@ -54,8 +55,15 @@ test:
 
 # カバレッジ: テストカバレッジを確認
 test-coverage:
-	go test -coverprofile=coverage.out ./...
+	GOCACHE=$(PWD)/.gocache go test -coverprofile=coverage.out ./...
 	go tool cover -func=coverage.out
+
+# パッケージごとのカバレッジを表示
+testcoverage:
+	@for pkg in $$(GOCACHE=$(PWD)/.gocache go list ./...); do \
+		echo "==> $$pkg"; \
+		GOCACHE=$(PWD)/.gocache go test -cover $$pkg; \
+	done
 
 # 比較: 既存の ecommerce-platform.json との差分を確認
 diff:
@@ -76,6 +84,7 @@ difftool:
 # クリーンアップ: 生成物を削除
 clean:
 	rm -f ../arch-gen generated-arch.json architecture.d2 coverage.out
+	rm -rf .gocache
 
 # ライブサーバー: ファイル変更を監視してブラウザを自動更新 (Mermaid)
 watch:

@@ -27,7 +27,7 @@ func TestGoDSLRenderer_Render(t *testing.T) {
 	if !strings.Contains(output, "\"node1\", Service, \"Node 1\"") {
 		t.Errorf("expected node parameters")
 	}
-	if !strings.Contains(output, "WithOwner(\"owner1\")") {
+	if !strings.Contains(output, "WithOwner(\"owner1\", \"cc1\")") {
 		t.Errorf("expected WithOwner")
 	}
 }
@@ -86,8 +86,8 @@ func TestGoDSLRenderer_Full(t *testing.T) {
 		"Encrypted: BoolPtr(true)",
 		"\"actor\": \"actor1\"",
 		"\"container\": \"sys1\"",
-		"arch.DefineFlow(\"f1\"",
-		"WithStep(1, \"r1\"",
+		"arch.DefineFlow(\"f1\", \"Flow 1\", \"desc\")",
+		".Step(\"r1\", \"step1\")",
 		"arch.Controls[\"c1\"]",
 	}
 
@@ -97,4 +97,3 @@ func TestGoDSLRenderer_Full(t *testing.T) {
 		}
 	}
 }
-

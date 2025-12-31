@@ -26,6 +26,8 @@ func ParseRichD2(content string) (*domain.Architecture, error) {
 	// Regex patterns for @calm: annotations
 	calmPattern := regexp.MustCompile(`#\s*@calm:(\w+)=(.+)$`)
 	flowPattern := regexp.MustCompile(`#\s*@calm:flow\s+id=(\S+)\s+name=(.+)$`)
+	flowDescPattern := regexp.MustCompile(`#\s*@calm:flow-description=(.+)$`)
+	flowMetaPattern := regexp.MustCompile(`#\s*@calm:flow-metadata=(.+)$`)
 	flowStepPattern := regexp.MustCompile(`#\s*@calm:flow-step\s+seq=(\d+)\s+rel=(\S+)\s+dir=(\S+)\s+desc=(.+)$`)
 	composedPattern := regexp.MustCompile(`#\s*@calm:composed-of\s+id=(\S+)\s+container=(\S+)\s+nodes=(.+)$`)
 	controlPattern := regexp.MustCompile(`#\s*@calm:control\s+id=(\S+)\s+data=(.+)$`)
@@ -82,6 +84,21 @@ func ParseRichD2(content string) (*domain.Architecture, error) {
 				Direction:      matches[3],
 				Description:    unescapeD2String(matches[4]),
 			})
+			continue
+		}
+
+		// Parse flow description
+		if matches := flowDescPattern.FindStringSubmatch(line); matches != nil && currentFlow != nil {
+			currentFlow.Description = unescapeD2String(matches[1])
+			continue
+		}
+
+		// Parse flow metadata
+		if matches := flowMetaPattern.FindStringSubmatch(line); matches != nil && currentFlow != nil {
+			if currentFlow.Metadata == nil {
+				currentFlow.Metadata = make(map[string]any)
+			}
+			json.Unmarshal([]byte(matches[1]), &currentFlow.Metadata)
 			continue
 		}
 
