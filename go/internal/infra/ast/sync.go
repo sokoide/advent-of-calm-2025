@@ -7,6 +7,9 @@ import (
 	"go/token"
 	"log"
 	"strings"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // SyncArchitectureFromJSON synchronizes the AST with the provided CALM JSON.
@@ -67,7 +70,8 @@ func SyncArchitectureFromJSON(f *ast.File, jsonStr string) error {
 			nodeType := "Service"
 			if n.Type != "" {
 				// Convert "service" -> "Service"
-				nodeType = strings.Title(strings.ToLower(n.Type))
+				caser := cases.Title(language.English)
+				nodeType = caser.String(strings.ToLower(n.Type))
 			}
 			if err := AddNodeInAST(f, n.ID, nodeType, n.Name, n.Desc); err != nil {
 				return err
@@ -130,6 +134,7 @@ func UpdateNodeNameInAST(f *ast.File, nodeID, newName string) error {
 
 // AddNodeInAST appends a new DefineNode call to the build or defineNodes function in the AST.
 func AddNodeInAST(f *ast.File, nodeID, nodeType, name, desc string) error {
+	typeExpr := findDefineNodeTypeExpr(f)
 	for _, decl := range f.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok {
@@ -153,7 +158,10 @@ func AddNodeInAST(f *ast.File, nodeID, nodeType, name, desc string) error {
 			}
 		}
 
-		// Create: <receiver>.DefineNode("id", domain.<Type>, "name", "desc")
+		// Create: <receiver>.DefineNode("id", <Type>, "name", "desc")
+		if typeExpr == nil {
+			typeExpr = defaultNodeTypeExpr(nodeType)
+		}
 		newStmt := &ast.ExprStmt{
 			X: &ast.CallExpr{
 				Fun: &ast.SelectorExpr{
@@ -162,10 +170,7 @@ func AddNodeInAST(f *ast.File, nodeID, nodeType, name, desc string) error {
 				},
 				Args: []ast.Expr{
 					&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", nodeID)},
-					&ast.SelectorExpr{
-						X:   ast.NewIdent("domain"),
-						Sel: ast.NewIdent(nodeType),
-					},
+					cloneTypeExpr(typeExpr),
 					&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", name)},
 					&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", desc)},
 				},
@@ -236,8 +241,7 @@ func UpdateNodePropertyInAST(f *ast.File, nodeID, property, value string) error 
 				if !ok {
 					continue
 				}
-				optSel, ok := optCall.Fun.(*ast.Ident)
-				if ok && optSel.Name == "WithOwner" && len(optCall.Args) >= 1 {
+				if isWithOwnerCall(optCall.Fun) && len(optCall.Args) >= 1 {
 					optCall.Args[0] = &ast.BasicLit{Kind: idLit.Kind, Value: fmt.Sprintf("%q", value)}
 					found = true
 				}
@@ -253,6 +257,62 @@ func UpdateNodePropertyInAST(f *ast.File, nodeID, property, value string) error 
 	return nil
 }
 
+func findDefineNodeTypeExpr(f *ast.File) ast.Expr {
+	var found ast.Expr
+	ast.Inspect(f, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || sel.Sel.Name != "DefineNode" {
+			return true
+		}
+		if len(call.Args) < 2 {
+			return true
+		}
+		found = call.Args[1]
+		return false
+	})
+	return found
+}
+
+func defaultNodeTypeExpr(nodeType string) ast.Expr {
+	if strings.Contains(nodeType, ".") {
+		parts := strings.SplitN(nodeType, ".", 2)
+		return &ast.SelectorExpr{
+			X:   ast.NewIdent(parts[0]),
+			Sel: ast.NewIdent(parts[1]),
+		}
+	}
+	return ast.NewIdent(nodeType)
+}
+
+func cloneTypeExpr(expr ast.Expr) ast.Expr {
+	switch v := expr.(type) {
+	case *ast.Ident:
+		return ast.NewIdent(v.Name)
+	case *ast.SelectorExpr:
+		return &ast.SelectorExpr{
+			X:   cloneTypeExpr(v.X),
+			Sel: ast.NewIdent(v.Sel.Name),
+		}
+	default:
+		return expr
+	}
+}
+
+func isWithOwnerCall(fn ast.Expr) bool {
+	switch v := fn.(type) {
+	case *ast.Ident:
+		return v.Name == "WithOwner"
+	case *ast.SelectorExpr:
+		return v.Sel.Name == "WithOwner"
+	default:
+		return false
+	}
+}
+
 // DeleteNodeInAST removes a DefineNode call with the given id from the AST.
 func DeleteNodeInAST(f *ast.File, nodeID string) error {
 	found := false
@@ -265,13 +325,14 @@ func DeleteNodeInAST(f *ast.File, nodeID string) error {
 		newList := make([]ast.Stmt, 0, len(fn.Body.List))
 		for _, stmt := range fn.Body.List {
 			shouldDelete := false
-			
+
 			// Check if stmt is arch.DefineNode("nodeID", ...)
 			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
 				if call, ok := exprStmt.X.(*ast.CallExpr); ok {
 					if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "DefineNode" {
 						if len(call.Args) > 0 {
-							if idLit, ok := call.Args[0].(*ast.BasicLit); ok && idLit.Value == fmt.Sprintf("%q", nodeID) {
+							if idLit, ok := call.Args[0].(*ast.BasicLit); ok &&
+								idLit.Value == fmt.Sprintf("%q", nodeID) {
 								shouldDelete = true
 								found = true
 							}

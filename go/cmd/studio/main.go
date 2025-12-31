@@ -5,9 +5,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"go/format"
-	"go/parser"
-	"go/token"
 	"io/fs"
 	"log"
 	"net/http"
@@ -21,9 +18,9 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/gorilla/websocket"
-	"github.com/sokoide/advent-of-calm-2025/internal/domain"
 	"github.com/sokoide/advent-of-calm-2025/internal/infra/ast"
 	"github.com/sokoide/advent-of-calm-2025/internal/infra/repository"
+	"github.com/sokoide/advent-of-calm-2025/internal/usecase"
 )
 
 var (
@@ -33,7 +30,7 @@ var (
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}
 	goDir       string
-	layoutRepo  domain.LayoutRepository
+	studioSvc   usecase.StudioService
 	lastContent struct {
 		GoCode string `json:"goCode"`
 		D2Code string `json:"d2Code"`
@@ -63,7 +60,8 @@ func main() {
 	}
 
 	log.Printf("🚀 Starting Studio in: %s", goDir)
-	layoutRepo = repository.NewFSLayoutRepository(filepath.Join(goDir, "architectures"))
+	layoutRepo := repository.NewFSLayoutRepository(filepath.Join(goDir, "architectures"))
+	studioSvc = usecase.NewStudioService(layoutRepo, ast.GoASTSyncer{})
 
 	// Force an initial read of the DSL file before anything else
 	initialReadDSL()
@@ -388,30 +386,17 @@ func handlePreviewJSONSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, mainPath, src, parser.ParseComments)
+	newCode, err := studioSvc.SyncFromJSON(string(src), req.JSON)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Sync AST in memory
-	if err := ast.SyncArchitectureFromJSON(f, req.JSON); err != nil {
 		log.Printf("❌ Sync Error: %v", err)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
 
-	var buf bytes.Buffer
-	if err := format.Node(&buf, fset, f); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
-		"newCode": buf.String(),
+		"newCode": newCode,
 	})
 }
 
@@ -443,38 +428,21 @@ func handleASTSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, mainPath, src, parser.ParseComments)
+	newCode, err := studioSvc.ApplyNodeAction(string(src), usecase.NodeAction{
+		Action:   req.Action,
+		NodeID:   req.NodeID,
+		NodeType: req.NodeType,
+		Name:     req.Name,
+		Desc:     req.Desc,
+		Property: req.Property,
+		Value:    req.Value,
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	switch req.Action {
-	case "add":
-		err = ast.AddNodeInAST(f, req.NodeID, req.NodeType, req.Name, req.Desc)
-	case "update":
-		err = ast.UpdateNodePropertyInAST(f, req.NodeID, req.Property, req.Value)
-	case "delete":
-		err = ast.DeleteNodeInAST(f, req.NodeID)
-	default:
-		http.Error(w, "Unknown action", http.StatusBadRequest)
-		return
-	}
-
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Write back to file
-	var buf bytes.Buffer
-	if err := format.Node(&buf, fset, f); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if err := os.WriteFile(mainPath, buf.Bytes(), 0644); err != nil {
+	if err := os.WriteFile(mainPath, []byte(newCode), 0644); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -492,7 +460,7 @@ func handleLayout(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		layout, err := layoutRepo.Load(id)
+		layout, err := studioSvc.LoadLayout(id)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -501,12 +469,12 @@ func handleLayout(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(layout)
 
 	case http.MethodPost:
-		var layout domain.ArchitectureLayout
+		var layout usecase.Layout
 		if err := json.NewDecoder(r.Body).Decode(&layout); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err := layoutRepo.Save(id, &layout); err != nil {
+		if err := studioSvc.SaveLayout(id, &layout); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -626,4 +594,3 @@ func applyD2ChangesToGo(d2Code string) ([]string, error) {
 
 	return changes, nil
 }
-

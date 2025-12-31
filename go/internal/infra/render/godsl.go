@@ -149,12 +149,19 @@ func generateRelDSL(sb *strings.Builder, rel *domain.Relationship) {
 		sb.WriteString("\t\t\tConnects: &Connects{\n")
 		sb.WriteString(fmt.Sprintf("\t\t\t\tSource: NodeInterface{Node: %q", src))
 		if len(rel.RelationshipType.Connects.Source.Interfaces) > 0 {
-			sb.WriteString(fmt.Sprintf(", Interfaces: %s", formatStringSlice(rel.RelationshipType.Connects.Source.Interfaces)))
+			sb.WriteString(
+				fmt.Sprintf(", Interfaces: %s", formatStringSlice(rel.RelationshipType.Connects.Source.Interfaces)),
+			)
 		}
 		sb.WriteString("},\n")
 		sb.WriteString(fmt.Sprintf("\t\t\t\tDestination: NodeInterface{Node: %q", dst))
 		if len(rel.RelationshipType.Connects.Destination.Interfaces) > 0 {
-			sb.WriteString(fmt.Sprintf(", Interfaces: %s", formatStringSlice(rel.RelationshipType.Connects.Destination.Interfaces)))
+			sb.WriteString(
+				fmt.Sprintf(
+					", Interfaces: %s",
+					formatStringSlice(rel.RelationshipType.Connects.Destination.Interfaces),
+				),
+			)
 		}
 		sb.WriteString("},\n")
 		sb.WriteString("\t\t\t},\n")

@@ -114,10 +114,20 @@ func (RichD2Renderer) Render(a *domain.Architecture) (string, error) {
 			sb.WriteString(fmt.Sprintf("  # @calm:description=%s\n", escapeD2String(rel.Description)))
 
 			if rel.RelationshipType.Connects.Source.Interfaces != nil {
-				sb.WriteString(fmt.Sprintf("  # @calm:srcInterfaces=%s\n", toJSON(rel.RelationshipType.Connects.Source.Interfaces)))
+				sb.WriteString(
+					fmt.Sprintf(
+						"  # @calm:srcInterfaces=%s\n",
+						toJSON(rel.RelationshipType.Connects.Source.Interfaces),
+					),
+				)
 			}
 			if rel.RelationshipType.Connects.Destination.Interfaces != nil {
-				sb.WriteString(fmt.Sprintf("  # @calm:dstInterfaces=%s\n", toJSON(rel.RelationshipType.Connects.Destination.Interfaces)))
+				sb.WriteString(
+					fmt.Sprintf(
+						"  # @calm:dstInterfaces=%s\n",
+						toJSON(rel.RelationshipType.Connects.Destination.Interfaces),
+					),
+				)
 			}
 			if rel.Encrypted != nil {
 				sb.WriteString(fmt.Sprintf("  # @calm:encrypted=%t\n", *rel.Encrypted))

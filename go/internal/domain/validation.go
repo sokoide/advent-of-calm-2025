@@ -33,7 +33,6 @@ func (a *Architecture) Validate(rules ...ValidationRule) []ValidationError {
 	return errors
 }
 
-
 // --- Built-in Validation Rules ---
 
 // allNodesHaveOwner checks that every node has an owner

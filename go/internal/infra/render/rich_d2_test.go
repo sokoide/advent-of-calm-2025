@@ -34,7 +34,7 @@ func TestRichD2Renderer_Render(t *testing.T) {
 
 func TestRichD2Renderer_SpecialChars(t *testing.T) {
 	arch := domain.NewArchitecture("test", "Test", "Desc with\nnewline and = equals")
-	
+
 	renderer := RichD2Renderer{}
 	output, err := renderer.Render(arch)
 	if err != nil {
@@ -48,13 +48,13 @@ func TestRichD2Renderer_SpecialChars(t *testing.T) {
 
 func TestRichD2Renderer_Full(t *testing.T) {
 	arch := domain.NewArchitecture("rich-arch", "Rich Architecture", "Rich Desc")
-	
+
 	arch.DefineNode("sys1", domain.System, "System 1", "desc")
 	arch.DefineNode("svc1", domain.Service, "Service 1", "desc")
 	arch.ComposedOf("comp1", "composed", "sys1", []string{"svc1"})
-	
+
 	arch.Interacts("int1", "interacts", "actor1", "svc1")
-	
+
 	renderer := RichD2Renderer{}
 	output, err := renderer.Render(arch)
 	if err != nil {
@@ -83,11 +83,11 @@ func TestRichD2Renderer_FlowsAndControls(t *testing.T) {
 	arch.DefineNode("n1", domain.Service, "N1", "desc")
 	arch.DefineNode("n2", domain.Service, "N2", "desc")
 	rel := arch.Connect("r1", "desc", "n1", "n2")
-	
+
 	arch.DefineFlow("f1", "Flow 1", "Flow Desc").
 		Meta("key", "val").
 		Step(rel.UniqueID, "Step 1")
-		
+
 	arch.AddControl("c1", "Control 1")
 
 	renderer := RichD2Renderer{}

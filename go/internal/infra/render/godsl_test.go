@@ -55,18 +55,18 @@ func TestGoDSLRenderer_Metadata(t *testing.T) {
 func TestGoDSLRenderer_Full(t *testing.T) {
 	arch := domain.NewArchitecture("full-arch", "Full Architecture", "Full Desc")
 	arch.ADRs = []string{"adr1.md"}
-	
+
 	arch.DefineNode("n1", domain.Service, "Node 1", "desc1",
 		domain.WithInterfaces(&domain.Interface{UniqueID: "i1", Name: "Intf 1", Protocol: "http", Port: 80}),
 	)
 	arch.DefineNode("n2", domain.Database, "Node 2", "desc2")
-	
+
 	arch.Connect("r1", "Rel 1", "n1", "n2").Data("internal", true).WithProtocol("grpc")
 	arch.Interacts("r2", "Rel 2", "actor1", "n1")
 	arch.ComposedOf("r3", "Rel 3", "sys1", []string{"n1"})
-	
+
 	arch.DefineFlow("f1", "Flow 1", "desc").Step("r1", "step1")
-	
+
 	arch.AddControl("c1", "Control 1", domain.NewRequirement("url1", nil))
 
 	renderer := GoDSLRenderer{}

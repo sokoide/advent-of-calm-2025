@@ -20,7 +20,13 @@ func TestNodeHelpers(t *testing.T) {
 	node := arch.Node("n1", Service, "svc", "desc").Standard("cc", "owner")
 
 	node.AddMeta("m1", "v1").AddControl("c1", "desc", NewRequirement("url", nil))
-	iface := node.Interface("i1", "http").SetPort(80).SetHost("localhost").SetPath("/health").SetName("health").SetDesc("desc").SetDB("db")
+	iface := node.Interface("i1", "http").
+		SetPort(80).
+		SetHost("localhost").
+		SetPath("/health").
+		SetName("health").
+		SetDesc("desc").
+		SetDB("db")
 
 	if node.Owner != "owner" || node.CostCenter != "cc" {
 		t.Fatalf("expected owner and cost center")
@@ -31,7 +37,9 @@ func TestNodeHelpers(t *testing.T) {
 	if node.Controls["c1"].Description != "desc" {
 		t.Fatalf("expected node control")
 	}
-	if iface.Port != 80 || iface.Host != "localhost" || iface.Path != "/health" || iface.Name != "health" || iface.Description != "desc" || iface.Database != "db" {
+	if iface.Port != 80 || iface.Host != "localhost" || iface.Path != "/health" || iface.Name != "health" ||
+		iface.Description != "desc" ||
+		iface.Database != "db" {
 		t.Fatalf("expected interface fields to be set")
 	}
 }
@@ -54,7 +62,8 @@ func TestRelationshipHelpers(t *testing.T) {
 	if rel.Metadata["k"] != "v" {
 		t.Fatalf("expected metadata to be set")
 	}
-	if rel.RelationshipType.Connects.Source.Interfaces[0] != "out" || rel.RelationshipType.Connects.Destination.Interfaces[0] != "in" {
+	if rel.RelationshipType.Connects.Source.Interfaces[0] != "out" ||
+		rel.RelationshipType.Connects.Destination.Interfaces[0] != "in" {
 		t.Fatalf("expected interfaces to be set")
 	}
 }
@@ -64,7 +73,13 @@ func TestConnectionBuilderHelpers(t *testing.T) {
 	src := arch.DefineNode("src", Service, "src", "desc", WithOwner("team", "cc"))
 	dst := arch.DefineNode("dst", Service, "dst", "desc", WithOwner("team", "cc"))
 
-	cb := src.ConnectTo(dst, "desc").WithID("custom").Via("out", "in").Encrypted(true).Is("internal").Tag("k", "v").Protocol("http")
+	cb := src.ConnectTo(dst, "desc").
+		WithID("custom").
+		Via("out", "in").
+		Encrypted(true).
+		Is("internal").
+		Tag("k", "v").
+		Protocol("http")
 	if cb.GetID() != "custom" {
 		t.Fatalf("expected custom id")
 	}
@@ -86,7 +101,11 @@ func TestFlowsHelpers(t *testing.T) {
 		t.Fatalf("expected flow metadata and direction")
 	}
 
-	builder := arch.DefineFlow("f2", "Flow2", "desc2").Meta("k2", "v2").MetaMap(map[string]any{"k3": "v3"}).Step("r2", "step2").StepEx("r3", "step3", "custom")
+	builder := arch.DefineFlow("f2", "Flow2", "desc2").
+		Meta("k2", "v2").
+		MetaMap(map[string]any{"k3": "v3"}).
+		Step("r2", "step2").
+		StepEx("r3", "step3", "custom")
 	if len(builder.flow.Transitions) != 2 {
 		t.Fatalf("expected 2 transitions")
 	}
@@ -98,7 +117,14 @@ func TestFlowsHelpers(t *testing.T) {
 func TestValidationRulesPositiveAndNegative(t *testing.T) {
 	t.Run("AllServicesHaveHealthEndpoint pass", func(t *testing.T) {
 		arch := NewArchitecture("a", "A", "desc")
-		arch.DefineNode("svc", Service, "svc", "desc", WithOwner("team", "cc"), WithMeta(map[string]any{"health-endpoint": "/health"}))
+		arch.DefineNode(
+			"svc",
+			Service,
+			"svc",
+			"desc",
+			WithOwner("team", "cc"),
+			WithMeta(map[string]any{"health-endpoint": "/health"}),
+		)
 		errs := AllServicesHaveHealthEndpoint().Validate(arch)
 		if len(errs) != 0 {
 			t.Fatalf("expected 0 errors, got %d", len(errs))
@@ -107,7 +133,14 @@ func TestValidationRulesPositiveAndNegative(t *testing.T) {
 
 	t.Run("AllDatabasesHaveBackupSchedule pass", func(t *testing.T) {
 		arch := NewArchitecture("a", "A", "desc")
-		arch.DefineNode("db", Database, "db", "desc", WithOwner("team", "cc"), WithMeta(map[string]any{"backup-schedule": "daily"}))
+		arch.DefineNode(
+			"db",
+			Database,
+			"db",
+			"desc",
+			WithOwner("team", "cc"),
+			WithMeta(map[string]any{"backup-schedule": "daily"}),
+		)
 		errs := AllDatabasesHaveBackupSchedule().Validate(arch)
 		if len(errs) != 0 {
 			t.Fatalf("expected 0 errors, got %d", len(errs))
@@ -116,7 +149,14 @@ func TestValidationRulesPositiveAndNegative(t *testing.T) {
 
 	t.Run("AllTier1NodesHaveRunbook pass", func(t *testing.T) {
 		arch := NewArchitecture("a", "A", "desc")
-		arch.DefineNode("svc", Service, "svc", "desc", WithOwner("team", "cc"), WithMeta(map[string]any{"tier": "tier-1", "runbook": "url"}))
+		arch.DefineNode(
+			"svc",
+			Service,
+			"svc",
+			"desc",
+			WithOwner("team", "cc"),
+			WithMeta(map[string]any{"tier": "tier-1", "runbook": "url"}),
+		)
 		errs := AllTier1NodesHaveRunbook().Validate(arch)
 		if len(errs) != 0 {
 			t.Fatalf("expected 0 errors, got %d", len(errs))

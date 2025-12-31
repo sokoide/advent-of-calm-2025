@@ -19,7 +19,7 @@ func TestRegenerate_ReadsGoDSL(t *testing.T) {
 	if err := os.MkdirAll(dslPath, 0755); err != nil {
 		t.Fatal(err)
 	}
-	
+
 	expectedCode := "package usecase\nfunc Build() {}"
 	if err := os.WriteFile(filepath.Join(dslPath, "ecommerce_architecture.go"), []byte(expectedCode), 0644); err != nil {
 		t.Fatal(err)
@@ -33,10 +33,10 @@ func TestRegenerate_ReadsGoDSL(t *testing.T) {
 	// We need to skip the actual 'go run' part for this unit test
 	// because it requires a full environment.
 	// For now, let's just test that regenerate() reads the file into lastContent.
-	
+
 	// Since regenerate() has 'go run' calls that will fail, let's just test the file reading part
 	// by checking if we can mock or isolate it.
-	
+
 	// (Actual implementation check)
 	mainPath := filepath.Join(goDir, dslRelativePath)
 	data, err := os.ReadFile(mainPath)
