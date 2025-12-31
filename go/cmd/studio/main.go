@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -52,6 +53,7 @@ func main() {
 	http.HandleFunc("/ws", handleWebSocket)
 	http.HandleFunc("/content", serveContent)
 	http.HandleFunc("/update", handleUpdate)
+	http.HandleFunc("/d2-to-go", handleD2ToGo)
 
 	port := "3000"
 	fmt.Printf("🎨 CALM Studio running at http://localhost:%s\n", port)
@@ -194,8 +196,24 @@ func handleClientUpdate(updateType, content string) {
 		}
 		// File watcher will pick it up and regenerate
 	case "d2":
-		// TODO: Parse D2, convert to Architecture, generate Go
-		log.Println("D2 → Go conversion requested (not yet implemented)")
+		// D2 update - regenerate SVG immediately
+		log.Println("📝 D2 update received, generating SVG...")
+		contentMu.Lock()
+		lastContent.D2Code = content
+		// Generate SVG
+		d2Cmd := exec.Command("d2", "-", "-")
+		d2Cmd.Stdin = strings.NewReader(content)
+		var svgOut, svgErr bytes.Buffer
+		d2Cmd.Stdout = &svgOut
+		d2Cmd.Stderr = &svgErr
+		if err := d2Cmd.Run(); err != nil {
+			log.Printf("❌ D2 error: %v\n%s", err, svgErr.String())
+		} else {
+			lastContent.SVG = svgOut.String()
+			log.Println("✅ SVG generated successfully")
+		}
+		contentMu.Unlock()
+		notifyClients("refresh-svg")
 	}
 }
 
@@ -225,10 +243,121 @@ func handleUpdate(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// handleD2ToGo converts D2 source back to Go DSL code
+func handleD2ToGo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		D2Code string `json:"d2Code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Apply D2 changes to main.go
+	changes, err := applyD2ChangesToGo(req.D2Code)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"changes": changes,
+		"success": len(changes) > 0,
+	})
+}
+
+// applyD2ChangesToGo parses D2, finds label changes, and updates main.go
+func applyD2ChangesToGo(d2Code string) ([]string, error) {
+	// Parse D2 to find node IDs and their labels
+	type nodeInfo struct {
+		calmID string
+		label  string
+	}
+	var nodes []nodeInfo
+
+	lines := strings.Split(d2Code, "\n")
+	var currentLabel string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Match node definition: id: Label {
+		if strings.Contains(trimmed, ": ") && strings.HasSuffix(trimmed, "{") {
+			parts := strings.SplitN(trimmed, ": ", 2)
+			if len(parts) == 2 {
+				currentLabel = strings.TrimSuffix(strings.TrimSpace(parts[1]), " {")
+			}
+		}
+
+		// Match @calm:id to associate with the node
+		if strings.Contains(trimmed, "@calm:id=") {
+			parts := strings.SplitN(trimmed, "@calm:id=", 2)
+			if len(parts) == 2 {
+				calmID := strings.TrimSpace(parts[1])
+				if currentLabel != "" {
+					nodes = append(nodes, nodeInfo{calmID: calmID, label: currentLabel})
+				}
+			}
+		}
+	}
+
+	if len(nodes) == 0 {
+		return nil, nil
+	}
+
+	// Read main.go
+	mainPath := filepath.Join(goDir, "main.go")
+	content, err := os.ReadFile(mainPath)
+	if err != nil {
+		return nil, err
+	}
+
+	goCode := string(content)
+	var changes []string
+
+	// Apply each node change
+	for _, n := range nodes {
+		// Look for DefineNode("calmID", Type, "OldLabel"
+		pattern := fmt.Sprintf(`DefineNode\(\s*"%s"\s*,\s*\w+\s*,\s*"([^"]+)"`, regexp.QuoteMeta(n.calmID))
+		re := regexp.MustCompile(pattern)
+		matches := re.FindStringSubmatch(goCode)
+
+		if len(matches) > 1 {
+			oldLabel := matches[1]
+			if oldLabel != n.label {
+				// Use simple string replacement for safety
+				fullMatch := matches[0]
+				newMatch := strings.Replace(fullMatch, `"`+oldLabel+`"`, `"`+n.label+`"`, 1)
+				goCode = strings.Replace(goCode, fullMatch, newMatch, 1)
+				changes = append(changes, fmt.Sprintf("%s: %q → %q", n.calmID, oldLabel, n.label))
+			}
+		}
+	}
+
+	if len(changes) > 0 {
+		// Write updated main.go
+		if err := os.WriteFile(mainPath, []byte(goCode), 0644); err != nil {
+			return nil, err
+		}
+	}
+
+	return changes, nil
+}
+
 func serveHTML(w http.ResponseWriter, r *http.Request) {
 	html := `<!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>CALM Studio</title>
     <link href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.css" rel="stylesheet">
     <style>
@@ -257,6 +386,7 @@ func serveHTML(w http.ResponseWriter, r *http.Request) {
         }
         .toolbar button:hover { background: #585b70; }
         .toolbar button.primary { background: #89b4fa; color: #1e1e2e; }
+        .toolbar button.warning { background: #fab387; color: #1e1e2e; }
         .main {
             display: flex; flex: 1; overflow: hidden;
         }
@@ -271,11 +401,13 @@ func serveHTML(w http.ResponseWriter, r *http.Request) {
             border-bottom: 1px solid #313244;
             display: flex; align-items: center; gap: 8px;
         }
-        .pane-content { flex: 1; overflow: auto; }
+        .pane-content { flex: 1; overflow: auto; position: relative; }
         #editor { height: 100%; }
+        #d2-editor { height: 100%; }
         #diagram {
-            background: #fff; padding: 20px;
+            background: #fff; padding: 20px; height: 100%;
             display: flex; align-items: center; justify-content: center;
+            overflow: auto;
         }
         #diagram svg { max-width: 100%; max-height: 100%; }
         .tabs {
@@ -287,22 +419,35 @@ func serveHTML(w http.ResponseWriter, r *http.Request) {
             font-size: 13px; border-bottom: 2px solid transparent;
         }
         .tab.active { color: #89b4fa; border-bottom-color: #89b4fa; }
+        .d2-toolbar {
+            position: absolute; top: 10px; right: 10px; z-index: 100;
+            display: flex; gap: 6px;
+        }
+        .d2-toolbar button {
+            background: #45475a; border: none; color: #cdd6f4;
+            padding: 4px 10px; border-radius: 4px; cursor: pointer;
+            font-size: 12px;
+        }
+        .d2-toolbar button:hover { background: #585b70; }
+        .d2-toolbar button.apply { background: #a6e3a1; color: #1e1e2e; }
+        #json-view, #d2-edit-view { display: none; padding: 0; height: 100%; }
+        #json-code { font-size: 12px; overflow: auto; padding: 15px; }
     </style>
 </head>
 <body>
     <header>
-        <h1>🏗️ CALM Studio</h1>
+        <h1>CALM Studio</h1>
         <div class="status" id="status">Connecting...</div>
         <div class="toolbar">
-            <button onclick="saveGoCode()">💾 Save</button>
-            <button onclick="formatCode()">🎨 Format</button>
-            <button class="primary" onclick="validateArch()">✅ Validate</button>
+            <button onclick="saveGoCode()">Save</button>
+            <button class="primary" onclick="validateArch()">Validate</button>
         </div>
     </header>
     <main class="main">
         <div class="pane">
             <div class="pane-header">
-                <span>📝</span> Go DSL (main.go)
+                <span>Go DSL (main.go)</span>
+                <button onclick="syncToD2()" style="margin-left:auto; font-size:11px; padding:3px 8px;">Sync to D2</button>
             </div>
             <div class="pane-content">
                 <div id="editor"></div>
@@ -310,20 +455,25 @@ func serveHTML(w http.ResponseWriter, r *http.Request) {
         </div>
         <div class="pane">
             <div class="pane-header">
-                <span>🎨</span> Architecture Diagram
+                <span>Architecture Diagram</span>
             </div>
             <div class="tabs">
                 <button class="tab active" onclick="showTab('diagram')">Diagram</button>
-                <button class="tab" onclick="showTab('d2')">D2 Source</button>
+                <button class="tab" onclick="showTab('d2-edit')">Edit D2</button>
                 <button class="tab" onclick="showTab('json')">JSON</button>
             </div>
             <div class="pane-content" id="content-area">
                 <div id="diagram"></div>
-                <div id="d2-view" style="display:none; padding: 15px;">
-                    <pre id="d2-code" style="font-size: 12px; overflow: auto;"></pre>
+                <div id="d2-edit-view">
+                    <div class="d2-toolbar">
+                        <button onclick="previewD2()">Preview</button>
+                        <button onclick="resetD2()">Reset</button>
+                        <button class="apply" onclick="applyD2ToGo()">Apply to Go</button>
+                    </div>
+                    <div id="d2-editor"></div>
                 </div>
-                <div id="json-view" style="display:none; padding: 15px;">
-                    <pre id="json-code" style="font-size: 12px; overflow: auto;"></pre>
+                <div id="json-view">
+                    <pre id="json-code"></pre>
                 </div>
             </div>
         </div>
@@ -331,14 +481,16 @@ func serveHTML(w http.ResponseWriter, r *http.Request) {
 
     <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
     <script>
-        let editor;
+        let goEditor, d2Editor;
         let ws;
         let currentTab = 'diagram';
+        let d2Dirty = false;  // Track if D2 has been manually edited
 
-        // Initialize Monaco Editor
+        // Initialize Monaco Editors
         require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' }});
         require(['vs/editor/editor.main'], function() {
-            editor = monaco.editor.create(document.getElementById('editor'), {
+            // Go Editor
+            goEditor = monaco.editor.create(document.getElementById('editor'), {
                 value: '// Loading...',
                 language: 'go',
                 theme: 'vs-dark',
@@ -347,13 +499,28 @@ func serveHTML(w http.ResponseWriter, r *http.Request) {
                 automaticLayout: true,
             });
 
-            // Auto-save on change (debounced)
+            // D2 Editor
+            d2Editor = monaco.editor.create(document.getElementById('d2-editor'), {
+                value: '// D2 Source',
+                language: 'yaml',  // D2 is similar to yaml
+                theme: 'vs-dark',
+                fontSize: 13,
+                minimap: { enabled: false },
+                automaticLayout: true,
+            });
+
+            // Track D2 editor changes
+            d2Editor.onDidChangeModelContent(() => {
+                d2Dirty = true;
+            });
+
+            // Auto-save Go on change (debounced)
             let saveTimeout;
-            editor.onDidChangeModelContent(() => {
+            goEditor.onDidChangeModelContent(() => {
                 clearTimeout(saveTimeout);
                 saveTimeout = setTimeout(() => {
                     if (ws && ws.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify({ type: 'go', content: editor.getValue() }));
+                        ws.send(JSON.stringify({ type: 'go', content: goEditor.getValue() }));
                     }
                 }, 1000);
             });
@@ -366,16 +533,24 @@ func serveHTML(w http.ResponseWriter, r *http.Request) {
             ws = new WebSocket('ws://' + location.host + '/ws');
             ws.onopen = () => {
                 document.getElementById('status').className = 'status connected';
-                document.getElementById('status').textContent = '🟢 Connected';
+                document.getElementById('status').textContent = 'Connected';
             };
             ws.onmessage = (e) => {
                 if (e.data === 'refresh') {
+                    // Don't overwrite D2 edits when Go file changes trigger regenerate
+                    if (d2Dirty) {
+                        console.log('Ignoring refresh while D2 is being edited');
+                        return;
+                    }
                     loadContent();
+                } else if (e.data === 'refresh-svg') {
+                    // Only update SVG (for D2 preview)
+                    loadSvgOnly();
                 }
             };
             ws.onclose = () => {
                 document.getElementById('status').className = 'status disconnected';
-                document.getElementById('status').textContent = '🔴 Disconnected';
+                document.getElementById('status').textContent = 'Disconnected';
                 setTimeout(connectWS, 3000);
             };
         }
@@ -385,19 +560,33 @@ func serveHTML(w http.ResponseWriter, r *http.Request) {
             const resp = await fetch('/content');
             const data = await resp.json();
 
-            if (editor && data.goCode) {
-                const pos = editor.getPosition();
-                editor.setValue(data.goCode);
-                if (pos) editor.setPosition(pos);
+            if (goEditor && data.goCode) {
+                const pos = goEditor.getPosition();
+                goEditor.setValue(data.goCode);
+                if (pos) goEditor.setPosition(pos);
+            }
+
+            if (d2Editor && data.d2Code && !d2Dirty) {
+                const pos = d2Editor.getPosition();
+                d2Editor.setValue(data.d2Code);
+                if (pos) d2Editor.setPosition(pos);
             }
 
             if (data.svg) {
                 document.getElementById('diagram').innerHTML = data.svg;
             }
 
-            document.getElementById('d2-code').textContent = data.d2Code || '';
             document.getElementById('json-code').textContent =
                 data.json ? JSON.stringify(JSON.parse(data.json), null, 2) : '';
+        }
+
+        async function loadSvgOnly() {
+            const resp = await fetch('/content');
+            const data = await resp.json();
+            if (data.svg) {
+                document.getElementById('diagram').innerHTML = data.svg;
+                console.log('SVG updated from D2 preview');
+            }
         }
 
         function showTab(tab) {
@@ -406,28 +595,87 @@ func serveHTML(w http.ResponseWriter, r *http.Request) {
             event.target.classList.add('active');
 
             document.getElementById('diagram').style.display = tab === 'diagram' ? 'flex' : 'none';
-            document.getElementById('d2-view').style.display = tab === 'd2' ? 'block' : 'none';
+            document.getElementById('d2-edit-view').style.display = tab === 'd2-edit' ? 'block' : 'none';
             document.getElementById('json-view').style.display = tab === 'json' ? 'block' : 'none';
-        }
 
-        function saveGoCode() {
-            if (editor && ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'go', content: editor.getValue() }));
+            if (tab === 'd2-edit' && d2Editor) {
+                d2Editor.layout();
             }
         }
 
-        function formatCode() {
-            if (editor) {
-                editor.getAction('editor.action.formatDocument').run();
+        function saveGoCode() {
+            if (goEditor && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'go', content: goEditor.getValue() }));
+            }
+        }
+
+        function previewD2() {
+            if (d2Editor && ws && ws.readyState === WebSocket.OPEN) {
+                console.log('Sending D2 preview...');
+                ws.send(JSON.stringify({ type: 'd2', content: d2Editor.getValue() }));
+                alert('Preview sent! Click the Diagram tab to see the updated diagram.');
+            } else {
+                alert('WebSocket not connected');
+            }
+        }
+
+        function resetD2() {
+            d2Dirty = false;
+            loadContent();
+        }
+
+        function syncToD2() {
+            // Save Go code and regenerate D2
+            if (goEditor && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'go', content: goEditor.getValue() }));
+                d2Dirty = false;
+                alert('Go code saved. D2 will be regenerated.');
+            }
+        }
+
+        async function applyD2ToGo() {
+            console.log('applyD2ToGo called');
+            if (!d2Editor) {
+                console.log('d2Editor is null');
+                alert('D2 Editor not ready');
+                return;
+            }
+
+            try {
+                console.log('Fetching /d2-to-go...');
+                const resp = await fetch('/d2-to-go', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ d2Code: d2Editor.getValue() })
+                });
+
+                console.log('Response status:', resp.status);
+                const data = await resp.json();
+                console.log('Response data:', data);
+
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else if (data.success && data.changes && data.changes.length > 0) {
+                    var nl = String.fromCharCode(10);
+                    alert('Go code updated!' + nl + nl + data.changes.join(nl));
+                    // Reset D2 dirty flag and reload content
+                    d2Dirty = false;
+                    loadContent();
+                } else {
+                    alert('No changes to apply (labels match Go code)');
+                }
+            } catch (err) {
+                console.log('Error:', err);
+                alert('Error: ' + err.message);
             }
         }
 
         async function validateArch() {
-            alert('Validation: Check console for output');
+            alert('Run: make check');
         }
     </script>
 </body>
 </html>`
-	w.Header().Set("Content-Type", "text/html")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(html))
 }
