@@ -22,5 +22,5 @@
 - **Validation as Test**: CALMモデルの整合性チェック自体をテストコードの一部として扱います。
 
 ## 4. Documentation & Decision Tracking
-- **SSoT (Single Source of Truth)**: アーキテクチャ情報はGo DSLで一元管理し、JSONやドキュメントはそこから生成します。
+- **SSoT (Single Source of Truth)**: アーキテクチャ情報はGo DSLで一元管理します。WYSIWYGエディタでの変更も AST 操作を通じて Go DSL に直接書き込まれます。
 - **ADR Integration**: 重要な設計上の決定は ADR として記録し、コード内のコメントやメタデータからリンクさせます。

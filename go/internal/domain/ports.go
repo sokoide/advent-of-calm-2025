@@ -9,3 +9,9 @@ type Renderer interface {
 type Parser interface {
 	Parse(string) (*Architecture, error)
 }
+
+// LayoutRepository manages the persistence of layout metadata.
+type LayoutRepository interface {
+	Load(id string) (*ArchitectureLayout, error)
+	Save(id string, layout *ArchitectureLayout) error
+}

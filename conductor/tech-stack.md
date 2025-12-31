@@ -8,6 +8,9 @@
 - **Custom Go DSL**: Functional Options Patternを用いた、宣言的なモデル定義。
 
 ## Tools & Utilities
+- **React Flow**: インタラクティブなダイアグラムエディタの基盤。
+- **Go AST (go/ast)**: Go ソースコードの解析・自動書き換えエンジン。
+- **Vite / React / Tailwind CSS 4**: モダンなフロントエンド開発スタック。
 - **calm-cli**: 生成されたJSONのスキーマバリデーションおよびテンプレート処理。
 - **Go Test**: `make test` によるユニットテスト実行と、`make test-coverage` によるカバレッジ計測。
 - **D2**: 建築図面の高度なレンダリングエンジン。

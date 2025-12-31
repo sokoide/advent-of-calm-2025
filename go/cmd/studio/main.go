@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"go/format"
+	"go/parser"
+	"go/token"
 	"io/fs"
 	"log"
 	"net/http"
@@ -18,6 +21,9 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/gorilla/websocket"
+	"github.com/sokoide/advent-of-calm-2025/internal/domain"
+	"github.com/sokoide/advent-of-calm-2025/internal/infra/ast"
+	"github.com/sokoide/advent-of-calm-2025/internal/infra/repository"
 )
 
 var (
@@ -27,6 +33,7 @@ var (
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}
 	goDir       string
+	layoutRepo  domain.LayoutRepository
 	lastContent struct {
 		GoCode string `json:"goCode"`
 		D2Code string `json:"d2Code"`
@@ -45,18 +52,34 @@ func main() {
 		goDir = flag.Arg(0)
 	}
 
+	layoutRepo = repository.NewFSLayoutRepository(filepath.Join(goDir, "architectures"))
+
 	// Initial generation
 	regenerate()
 
 	// Start file watcher
 	go watchFiles()
 
+	// Static frontend
+	distPath := filepath.Join(goDir, "cmd/studio/frontend/dist")
+	fs := http.FileServer(http.Dir(distPath))
+
 	// HTTP handlers
-	http.HandleFunc("/", serveHTML)
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// Serve index.html for unknown paths (SPA)
+		path := filepath.Join(distPath, r.URL.Path)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			http.ServeFile(w, r, filepath.Join(distPath, "index.html"))
+			return
+		}
+		fs.ServeHTTP(w, r)
+	})
 	http.HandleFunc("/ws", handleWebSocket)
-	http.HandleFunc("/content", serveContent)
-	http.HandleFunc("/update", handleUpdate)
-	http.HandleFunc("/d2-to-go", handleD2ToGo)
+	http.HandleFunc("/content", withCORS(serveContent))
+	http.HandleFunc("/update", withCORS(handleUpdate))
+	http.HandleFunc("/d2-to-go", withCORS(handleD2ToGo))
+	http.HandleFunc("/layout", withCORS(handleLayout))
+	http.HandleFunc("/sync-ast", withCORS(handleASTSync))
 
 	port := "3000"
 	fmt.Printf("🎨 CALM Studio running at http://localhost:%s\n", port)
@@ -218,6 +241,21 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func withCORS(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next(w, r)
+	}
+}
+
 func handleClientUpdate(updateType, content string) {
 	switch updateType {
 	case "go":
@@ -274,6 +312,108 @@ func handleUpdate(w http.ResponseWriter, r *http.Request) {
 
 	handleClientUpdate(update.Type, update.Content)
 	w.WriteHeader(http.StatusOK)
+}
+
+func handleASTSync(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Action   string `json:"action"` // "add", "update", "delete"
+		NodeID   string `json:"nodeId"`
+		NodeType string `json:"nodeType,omitempty"`
+		Name     string `json:"name,omitempty"`
+		Desc     string `json:"desc,omitempty"`
+		Property string `json:"property,omitempty"`
+		Value    string `json:"value,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	mainPath := filepath.Join(goDir, dslRelativePath)
+	src, err := os.ReadFile(mainPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, mainPath, src, parser.ParseComments)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	switch req.Action {
+	case "add":
+		err = ast.AddNodeInAST(f, req.NodeID, req.NodeType, req.Name, req.Desc)
+	case "update":
+		err = ast.UpdateNodePropertyInAST(f, req.NodeID, req.Property, req.Value)
+	case "delete":
+		err = ast.DeleteNodeInAST(f, req.NodeID)
+	default:
+		http.Error(w, "Unknown action", http.StatusBadRequest)
+		return
+	}
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Write back to file
+	var buf bytes.Buffer
+	if err := format.Node(&buf, fset, f); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := os.WriteFile(mainPath, buf.Bytes(), 0644); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("✅ AST Synced: %s node %s", req.Action, req.NodeID)
+	w.WriteHeader(http.StatusOK)
+}
+
+func handleLayout(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		http.Error(w, "Missing architecture id", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		layout, err := layoutRepo.Load(id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(layout)
+
+	case http.MethodPost:
+		var layout domain.ArchitectureLayout
+		if err := json.NewDecoder(r.Body).Decode(&layout); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := layoutRepo.Save(id, &layout); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 // handleD2ToGo converts D2 source back to Go DSL code
