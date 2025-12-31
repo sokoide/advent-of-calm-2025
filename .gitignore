@@ -3,4 +3,7 @@ node_modules/
 *.log
 .vscode/settings.json
 **/.docusaurus/
+
+# AI
 .serena/
+conductor/archive/

@@ -9,6 +9,8 @@ help:
 	@echo "  make run       - プログラムを実行してアーキテクチャ JSON を出力します"
 	@echo "  make validate  - アーキテクチャを生成し、CALM バリデーションを実行します"
 	@echo "  make check     - Go DSL のバリデーションルールを実行します"
+	@echo "  make test      - ユニットテストを実行します"
+	@echo "  make test-coverage - テストカバレッジを確認します"
 	@echo "  make diff      - 既存の ecommerce-platform.json との差分を確認します"
 	@echo "  make difftool  - 既存の ecommerce-platform.json との差分を目で確認します"
 	@echo "  make diff-arch - アーキテクチャの意味的な差分を表示します"
@@ -46,6 +48,15 @@ validate:
 check:
 	@go run ./cmd/arch-gen -validate
 
+# テスト: ユニットテストを実行
+test:
+	go test ./...
+
+# カバレッジ: テストカバレッジを確認
+test-coverage:
+	go test -coverprofile=coverage.out ./...
+	go tool cover -func=coverage.out
+
 # 比較: 既存の ecommerce-platform.json との差分を確認
 diff:
 	@jq -S . ../architectures/ecommerce-platform.json > /tmp/expected.json
@@ -64,7 +75,7 @@ difftool:
 
 # クリーンアップ: 生成物を削除
 clean:
-	rm -f ../arch-gen generated-arch.json architecture.d2
+	rm -f ../arch-gen generated-arch.json architecture.d2 coverage.out
 
 # ライブサーバー: ファイル変更を監視してブラウザを自動更新 (Mermaid)
 watch:

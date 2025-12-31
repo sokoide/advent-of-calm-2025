@@ -5,6 +5,9 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+
 	"github.com/sokoide/advent-of-calm-2025/internal/domain"
 )
 
@@ -66,7 +69,8 @@ func (GoDSLRenderer) Render(a *domain.Architecture) (string, error) {
 
 func generateNodeDSL(sb *strings.Builder, node *domain.Node) {
 	nodeType := string(node.NodeType)
-	nodeType = strings.Title(strings.ToLower(nodeType))
+	caser := cases.Title(language.English)
+	nodeType = caser.String(strings.ToLower(nodeType))
 
 	sb.WriteString(fmt.Sprintf("\tarch.DefineNode(\n"))
 	sb.WriteString(fmt.Sprintf("\t\t%q, %s, %q,\n", node.UniqueID, nodeType, node.Name))
@@ -232,7 +236,12 @@ func formatValue(v any) string {
 	case []string:
 		return formatStringSlice(val)
 	case map[string]any:
-		return "map[string]any{...}" // Simplified for complex maps
+		var items []string
+		keys := sortedKeys(val)
+		for _, k := range keys {
+			items = append(items, fmt.Sprintf("%q: %s", k, formatValue(val[k])))
+		}
+		return "map[string]any{" + strings.Join(items, ", ") + "}"
 	default:
 		return fmt.Sprintf("%#v", val)
 	}

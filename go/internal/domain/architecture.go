@@ -53,7 +53,7 @@ type Transition struct {
 }
 
 type Node struct {
-	arch        *Architecture       `json:"-"`
+	Arch        *Architecture       `json:"-"`
 	UniqueID    string              `json:"unique-id"`
 	NodeType    NodeType            `json:"node-type"`
 	Name        string              `json:"name"`

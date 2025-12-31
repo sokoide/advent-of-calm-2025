@@ -45,6 +45,8 @@ func ParseRichD2(content string) (*domain.Architecture, error) {
 				parseNodeAnnotation(currentNode, key, value)
 			} else if currentRel != nil {
 				parseRelAnnotation(currentRel, key, value)
+			} else if currentFlow != nil {
+				parseFlowAnnotation(currentFlow, key, value)
 			} else {
 				// Top-level architecture annotation
 				switch key {
@@ -115,7 +117,7 @@ func ParseRichD2(content string) (*domain.Architecture, error) {
 				arch.Nodes = append(arch.Nodes, currentNode)
 			}
 			currentNode = &domain.Node{
-				arch:     arch,
+				Arch:     arch,
 				UniqueID: matches[1],
 				Name:     matches[2],
 				Metadata: make(map[string]any),
@@ -235,6 +237,13 @@ func parseRelAnnotation(rel *domain.Relationship, key, value string) {
 			rel.RelationshipType.Interacts = make(map[string]any)
 		}
 		rel.RelationshipType.Interacts["actor"] = value
+	}
+}
+
+func parseFlowAnnotation(flow *domain.Flow, key, value string) {
+	switch key {
+	case "metadata":
+		json.Unmarshal([]byte(value), &flow.Metadata)
 	}
 }
 

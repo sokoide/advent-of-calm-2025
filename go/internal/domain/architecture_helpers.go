@@ -26,7 +26,7 @@ func (a *Architecture) AddControl(id string, desc string, reqs ...Requirement) *
 
 func (a *Architecture) Node(id string, ntype NodeType, name, desc string) *Node {
 	n := &Node{
-		arch:        a,
+		Arch:        a,
 		UniqueID:    id,
 		NodeType:    ntype,
 		Name:        name,
@@ -279,7 +279,7 @@ func WithControl(id, desc string, reqs ...Requirement) NodeOption {
 // It replaces the verbose Node() method calls with a cleaner config style.
 func (a *Architecture) DefineNode(id string, ntype NodeType, name, desc string, opts ...NodeOption) *Node {
 	n := &Node{
-		arch:        a,
+		Arch:        a,
 		UniqueID:    id,
 		NodeType:    ntype,
 		Name:        name,
@@ -309,8 +309,8 @@ func (n *Node) ConnectTo(dest *Node, desc string) *ConnectionBuilder {
 		},
 	}
 	// Auto-register with the architecture
-	if n.arch != nil {
-		n.arch.Relationships = append(n.arch.Relationships, rel)
+	if n.Arch != nil {
+		n.Arch.Relationships = append(n.Arch.Relationships, rel)
 	}
 	return &ConnectionBuilder{rel: rel}
 }
