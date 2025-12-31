@@ -25,7 +25,7 @@ setup:
 
 # ビルド: 実行ファイルを生成
 build:
-	go build -o ../arch-gen .
+	go build -o ../arch-gen ./cmd/arch-gen
 
 # フォーマット: golines で 120 文字制限を適用して整形
 format:
@@ -34,22 +34,22 @@ format:
 
 # 実行: JSON を標準出力に書き出し
 run:
-	@go run .
+	@go run ./cmd/arch-gen
 
 # バリデーション: JSON を生成して calm validate を実行
 validate:
-	@go run . > generated-arch.json
+	@go run ./cmd/arch-gen > generated-arch.json
 	calm validate -a generated-arch.json
 	@rm generated-arch.json
 
 # Go DSL バリデーション: 内蔵ルールを実行
 check:
-	@go run . -validate
+	@go run ./cmd/arch-gen -validate
 
 # 比較: 既存の ecommerce-platform.json との差分を確認
 diff:
 	@jq -S . ../architectures/ecommerce-platform.json > /tmp/expected.json
-	@go run . > /tmp/raw_actual.json
+	@go run ./cmd/arch-gen > /tmp/raw_actual.json
 	@jq -S . /tmp/raw_actual.json > /tmp/actual.json
 	diff -u /tmp/expected.json /tmp/actual.json || true
 	@rm /tmp/expected.json /tmp/actual.json /tmp/raw_actual.json
@@ -57,7 +57,7 @@ diff:
 # 比較: 既存の ecommerce-platform.json との差分を確認
 difftool:
 	@jq -S . ../architectures/ecommerce-platform.json > /tmp/expected.json
-	@go run . > /tmp/raw_actual.json
+	@go run ./cmd/arch-gen > /tmp/raw_actual.json
 	@jq -S . /tmp/raw_actual.json > /tmp/actual.json
 	nvim -d /tmp/expected.json /tmp/actual.json
 	@rm /tmp/expected.json /tmp/actual.json /tmp/raw_actual.json
@@ -73,12 +73,12 @@ watch:
 
 # アーキテクチャ差分: 意味的な差分を表示
 diff-arch:
-	@go run . > /tmp/new-arch.json
+	@go run ./cmd/arch-gen > /tmp/new-arch.json
 	@cd cmd/diff && go run . ../../../architectures/ecommerce-platform.json /tmp/new-arch.json
 
 # D2 ダイアグラム生成
 d2:
-	@go run . -format d2 > architecture.d2
+	@go run ./cmd/arch-gen -format d2 > architecture.d2
 	@echo "✅ Generated architecture.d2"
 	@command -v d2 >/dev/null 2>&1 && d2 architecture.d2 architecture.svg && echo "✅ Generated architecture.svg" || echo "💡 Install d2 to generate SVG: brew install d2"
 

@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -53,7 +56,7 @@ func main() {
 		mode = "D2"
 	}
 	fmt.Printf("🚀 Live Server (%s) running at http://localhost:%s\n", mode, port)
-	fmt.Printf("📁 Watching: %s/*.go\n", goDir)
+	fmt.Printf("📁 Watching: %s/internal and %s/cmd/arch-gen\n", goDir, goDir)
 	fmt.Println("💡 Edit your Go files and see changes instantly!")
 
 	log.Fatal(http.ListenAndServe(":"+port, nil))
@@ -66,7 +69,7 @@ func watchFiles(dir string) {
 	}
 	defer watcher.Close()
 
-	if err := watcher.Add(dir); err != nil {
+	if err := addWatchDirs(watcher, dir); err != nil {
 		log.Fatal(err)
 	}
 
@@ -77,7 +80,7 @@ func watchFiles(dir string) {
 		select {
 		case event := <-watcher.Events:
 			if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
-				if strings.HasSuffix(event.Name, ".go") && !strings.Contains(event.Name, "cmd/") {
+				if strings.HasSuffix(event.Name, ".go") {
 					debounce.Reset(300 * time.Millisecond)
 				}
 			}
@@ -92,12 +95,42 @@ func watchFiles(dir string) {
 	}
 }
 
+func addWatchDirs(watcher *fsnotify.Watcher, root string) error {
+	watchRoots := []string{
+		filepath.Join(root, "internal"),
+		filepath.Join(root, "cmd", "arch-gen"),
+	}
+
+	for _, dir := range watchRoots {
+		if _, err := os.Stat(dir); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return err
+		}
+
+		if err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return watcher.Add(path)
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func regenerate(dir string) bool {
 	var cmd *exec.Cmd
 	if d2Mode {
-		cmd = exec.Command("go", "run", ".", "-format", "d2")
+		cmd = exec.Command("go", "run", "./cmd/arch-gen", "-format", "d2")
 	} else {
-		cmd = exec.Command("go", "run", ".")
+		cmd = exec.Command("go", "run", "./cmd/arch-gen")
 	}
 	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer

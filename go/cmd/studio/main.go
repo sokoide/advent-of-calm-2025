@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -35,6 +36,8 @@ var (
 	contentMu sync.RWMutex
 )
 
+const dslRelativePath = "internal/usecase/ecommerce_architecture.go"
+
 func main() {
 	flag.Parse()
 	goDir = "."
@@ -57,7 +60,7 @@ func main() {
 
 	port := "3000"
 	fmt.Printf("🎨 CALM Studio running at http://localhost:%s\n", port)
-	fmt.Printf("📁 Watching: %s/*.go\n", goDir)
+	fmt.Printf("📁 Watching: %s/internal and %s/cmd/arch-gen\n", goDir, goDir)
 	fmt.Println("💡 Edit Go code or D2 diagram - changes sync both ways!")
 
 	log.Fatal(http.ListenAndServe(":"+port, nil))
@@ -70,7 +73,7 @@ func watchFiles() {
 	}
 	defer watcher.Close()
 
-	if err := watcher.Add(goDir); err != nil {
+	if err := addWatchDirs(watcher, goDir); err != nil {
 		log.Fatal(err)
 	}
 
@@ -81,7 +84,7 @@ func watchFiles() {
 		select {
 		case event := <-watcher.Events:
 			if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
-				if strings.HasSuffix(event.Name, ".go") && !strings.Contains(event.Name, "cmd/") {
+				if strings.HasSuffix(event.Name, ".go") {
 					debounce.Reset(300 * time.Millisecond)
 				}
 			}
@@ -96,9 +99,39 @@ func watchFiles() {
 	}
 }
 
+func addWatchDirs(watcher *fsnotify.Watcher, root string) error {
+	watchRoots := []string{
+		filepath.Join(root, "internal"),
+		filepath.Join(root, "cmd", "arch-gen"),
+	}
+
+	for _, dir := range watchRoots {
+		if _, err := os.Stat(dir); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return err
+		}
+
+		if err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return watcher.Add(path)
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func regenerate() bool {
 	// Get JSON output
-	cmdJSON := exec.Command("go", "run", ".")
+	cmdJSON := exec.Command("go", "run", "./cmd/arch-gen")
 	cmdJSON.Dir = goDir
 	var jsonOut, jsonErr bytes.Buffer
 	cmdJSON.Stdout = &jsonOut
@@ -110,7 +143,7 @@ func regenerate() bool {
 	}
 
 	// Get Rich D2 output
-	cmdD2 := exec.Command("go", "run", ".", "-format", "rich-d2")
+	cmdD2 := exec.Command("go", "run", "./cmd/arch-gen", "-format", "rich-d2")
 	cmdD2.Dir = goDir
 	var d2Out bytes.Buffer
 	cmdD2.Stdout = &d2Out
@@ -128,7 +161,7 @@ func regenerate() bool {
 
 	// Read Go source
 	goCode := ""
-	mainPath := filepath.Join(goDir, "main.go")
+	mainPath := filepath.Join(goDir, dslRelativePath)
 	if data, err := os.ReadFile(mainPath); err == nil {
 		goCode = string(data)
 	}
@@ -188,8 +221,8 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 func handleClientUpdate(updateType, content string) {
 	switch updateType {
 	case "go":
-		// Write Go code to main.go and regenerate
-		mainPath := filepath.Join(goDir, "main.go")
+		// Write Go code to the DSL file and regenerate.
+		mainPath := filepath.Join(goDir, dslRelativePath)
 		if err := os.WriteFile(mainPath, []byte(content), 0644); err != nil {
 			log.Printf("Error writing Go file: %v", err)
 			return
@@ -258,7 +291,7 @@ func handleD2ToGo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Apply D2 changes to main.go
+	// Apply D2 changes to the DSL file.
 	changes, err := applyD2ChangesToGo(req.D2Code)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -275,7 +308,7 @@ func handleD2ToGo(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// applyD2ChangesToGo parses D2, finds label changes, and updates main.go
+// applyD2ChangesToGo parses D2, finds label changes, and updates the DSL file.
 func applyD2ChangesToGo(d2Code string) ([]string, error) {
 	// Parse D2 to find node IDs and their labels
 	type nodeInfo struct {
@@ -314,8 +347,8 @@ func applyD2ChangesToGo(d2Code string) ([]string, error) {
 		return nil, nil
 	}
 
-	// Read main.go
-	mainPath := filepath.Join(goDir, "main.go")
+	// Read the DSL file.
+	mainPath := filepath.Join(goDir, dslRelativePath)
 	content, err := os.ReadFile(mainPath)
 	if err != nil {
 		return nil, err
@@ -327,7 +360,7 @@ func applyD2ChangesToGo(d2Code string) ([]string, error) {
 	// Apply each node change
 	for _, n := range nodes {
 		// Look for DefineNode("calmID", Type, "OldLabel"
-		pattern := fmt.Sprintf(`DefineNode\(\s*"%s"\s*,\s*\w+\s*,\s*"([^"]+)"`, regexp.QuoteMeta(n.calmID))
+		pattern := fmt.Sprintf(`DefineNode\(\s*"%s"\s*,\s*[\w\.]+\s*,\s*"([^"]+)"`, regexp.QuoteMeta(n.calmID))
 		re := regexp.MustCompile(pattern)
 		matches := re.FindStringSubmatch(goCode)
 
@@ -344,7 +377,7 @@ func applyD2ChangesToGo(d2Code string) ([]string, error) {
 	}
 
 	if len(changes) > 0 {
-		// Write updated main.go
+		// Write updated DSL file.
 		if err := os.WriteFile(mainPath, []byte(goCode), 0644); err != nil {
 			return nil, err
 		}
@@ -432,6 +465,38 @@ func serveHTML(w http.ResponseWriter, r *http.Request) {
         .d2-toolbar button.apply { background: #a6e3a1; color: #1e1e2e; }
         #json-view, #d2-edit-view { display: none; padding: 0; height: 100%; }
         #json-code { font-size: 12px; overflow: auto; padding: 15px; }
+        /* Properties Panel */
+        .props-panel {
+            width: 280px; min-width: 280px;
+            background: #1e1e2e; border-left: 1px solid #313244;
+            display: flex; flex-direction: column;
+        }
+        .props-panel.hidden { display: none; }
+        .props-header {
+            background: #181825; padding: 10px 15px;
+            font-size: 13px; font-weight: 500; color: #a6adc8;
+            border-bottom: 1px solid #313244;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .props-close { background: none; border: none; color: #6c7086; cursor: pointer; font-size: 16px; }
+        .props-body { padding: 15px; overflow-y: auto; flex: 1; }
+        .props-field { margin-bottom: 12px; }
+        .props-label { font-size: 11px; color: #6c7086; margin-bottom: 4px; text-transform: uppercase; }
+        .props-input {
+            width: 100%; background: #313244; border: 1px solid #45475a;
+            color: #cdd6f4; padding: 6px 10px; border-radius: 4px; font-size: 13px;
+        }
+        .props-input:focus { outline: none; border-color: #89b4fa; }
+        .props-textarea { min-height: 80px; resize: vertical; font-family: monospace; font-size: 11px; }
+        .props-btn {
+            width: 100%; background: #89b4fa; color: #1e1e2e; border: none;
+            padding: 8px; border-radius: 4px; cursor: pointer; font-size: 13px; margin-top: 10px;
+        }
+        .props-btn:hover { background: #7aa2f7; }
+        /* Clickable SVG nodes */
+        #diagram svg g[id] { cursor: pointer; }
+        #diagram svg g[id]:hover rect, #diagram svg g[id]:hover ellipse { filter: brightness(0.9); }
+        #diagram svg g.selected rect, #diagram svg g.selected ellipse { stroke: #89b4fa !important; stroke-width: 3 !important; }
     </style>
 </head>
 <body>
@@ -446,7 +511,7 @@ func serveHTML(w http.ResponseWriter, r *http.Request) {
     <main class="main">
         <div class="pane">
             <div class="pane-header">
-                <span>Go DSL (main.go)</span>
+                <span>Go DSL (internal/usecase/ecommerce_architecture.go)</span>
                 <button onclick="syncToD2()" style="margin-left:auto; font-size:11px; padding:3px 8px;">Sync to D2</button>
             </div>
             <div class="pane-content">
@@ -477,6 +542,38 @@ func serveHTML(w http.ResponseWriter, r *http.Request) {
                 </div>
             </div>
         </div>
+        <!-- Properties Panel -->
+        <aside class="props-panel hidden" id="props-panel">
+            <div class="props-header">
+                <span>Properties</span>
+                <button class="props-close" onclick="closePropsPanel()">×</button>
+            </div>
+            <div class="props-body">
+                <div class="props-field">
+                    <div class="props-label">Node ID</div>
+                    <input type="text" class="props-input" id="prop-id" readonly>
+                </div>
+                <div class="props-field">
+                    <div class="props-label">Name</div>
+                    <input type="text" class="props-input" id="prop-name">
+                </div>
+                <div class="props-field">
+                    <div class="props-label">Type</div>
+                    <select class="props-input" id="prop-type">
+                        <option value="service">Service</option>
+                        <option value="database">Database</option>
+                        <option value="system">System</option>
+                        <option value="actor">Actor</option>
+                        <option value="queue">Queue</option>
+                    </select>
+                </div>
+                <div class="props-field">
+                    <div class="props-label">Owner</div>
+                    <input type="text" class="props-input" id="prop-owner">
+                </div>
+                <button class="props-btn" onclick="applyNodeChanges()">Apply Changes</button>
+            </div>
+        </aside>
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
@@ -673,6 +770,158 @@ func serveHTML(w http.ResponseWriter, r *http.Request) {
         async function validateArch() {
             alert('Run: make check');
         }
+
+        // ===== WYSIWYG Diagram Editing =====
+        let selectedNodeId = null;
+        let nodesData = {};  // Cache node data from D2
+
+        function setupDiagramClickHandlers() {
+            const diagram = document.getElementById('diagram');
+            const svg = diagram.querySelector('svg');
+            if (!svg) return;
+
+            // Find all clickable groups (nodes have ID in D2)
+            svg.querySelectorAll('g[id]').forEach(g => {
+                g.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    selectNode(g.id);
+                });
+            });
+
+            // Click on background to deselect
+            svg.addEventListener('click', () => {
+                deselectNode();
+            });
+        }
+
+        function selectNode(nodeId) {
+            deselectNode();
+            selectedNodeId = nodeId;
+
+            // Highlight the node
+            const diagram = document.getElementById('diagram');
+            const svg = diagram.querySelector('svg');
+            const g = svg.querySelector('g[id="' + nodeId + '"]');
+            if (g) g.classList.add('selected');
+
+            // Parse D2 to get node data
+            if (d2Editor) {
+                const d2Code = d2Editor.getValue();
+                const nodeData = parseNodeFromD2(nodeId, d2Code);
+                showPropsPanel(nodeData);
+            }
+        }
+
+        function deselectNode() {
+            if (selectedNodeId) {
+                const diagram = document.getElementById('diagram');
+                const svg = diagram.querySelector('svg');
+                const g = svg && svg.querySelector('g.selected');
+                if (g) g.classList.remove('selected');
+            }
+            selectedNodeId = null;
+        }
+
+        function parseNodeFromD2(nodeId, d2Code) {
+            // Extract node info from D2 code using @calm annotations
+            const nodeData = { id: nodeId, name: '', type: 'service', owner: '' };
+            const lines = d2Code.split(String.fromCharCode(10));
+            let inNode = false;
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                // Check if this line defines our node
+                if (line.trim().startsWith(nodeId + ':') || line.includes('@calm:id=' + nodeId)) {
+                    inNode = true;
+                    // Extract label from "id: Label {"
+                    const match = line.match(/:\s*([^{]+)\s*\{/);
+                    if (match) {
+                        nodeData.name = match[1].trim();
+                    }
+                }
+                if (inNode) {
+                    if (line.includes('@calm:type=')) {
+                        nodeData.type = line.split('@calm:type=')[1].trim();
+                    }
+                    if (line.includes('@calm:owner=')) {
+                        nodeData.owner = line.split('@calm:owner=')[1].trim();
+                    }
+                    if (line.includes('@calm:id=')) {
+                        nodeData.calmId = line.split('@calm:id=')[1].trim();
+                    }
+                    // End of node block
+                    if (line.trim() === '}' && inNode) {
+                        break;
+                    }
+                }
+            }
+            return nodeData;
+        }
+
+        function showPropsPanel(nodeData) {
+            document.getElementById('prop-id').value = nodeData.calmId || nodeData.id;
+            document.getElementById('prop-name').value = nodeData.name || '';
+            document.getElementById('prop-type').value = nodeData.type || 'service';
+            document.getElementById('prop-owner').value = nodeData.owner || '';
+            document.getElementById('props-panel').classList.remove('hidden');
+        }
+
+        function closePropsPanel() {
+            document.getElementById('props-panel').classList.add('hidden');
+            deselectNode();
+        }
+
+        function applyNodeChanges() {
+            if (!selectedNodeId || !d2Editor) return;
+
+            const newName = document.getElementById('prop-name').value;
+            const newType = document.getElementById('prop-type').value;
+            const newOwner = document.getElementById('prop-owner').value;
+            const calmId = document.getElementById('prop-id').value;
+
+            // Update D2 code
+            let d2Code = d2Editor.getValue();
+            const lines = d2Code.split(String.fromCharCode(10));
+            let inNode = false;
+            let nodeStartLine = -1;
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                if (line.includes('@calm:id=' + calmId)) {
+                    // Found the node, update the label on the preceding line
+                    for (let j = i - 1; j >= 0; j--) {
+                        if (lines[j].includes(': ') && lines[j].includes('{')) {
+                            lines[j] = lines[j].replace(/:\s*[^{]+\s*\{/, ': ' + newName + ' {');
+                            break;
+                        }
+                    }
+                }
+                if (line.includes('@calm:type=') && inNode) {
+                    lines[i] = line.replace(/@calm:type=\S+/, '@calm:type=' + newType);
+                }
+                if (line.includes('@calm:owner=') && inNode) {
+                    lines[i] = line.replace(/@calm:owner=\S+/, '@calm:owner=' + newOwner);
+                }
+                if (line.includes('@calm:id=' + calmId)) {
+                    inNode = true;
+                }
+                if (line.trim() === '}' && inNode) {
+                    inNode = false;
+                }
+            }
+
+            d2Editor.setValue(lines.join(String.fromCharCode(10)));
+            d2Dirty = true;
+
+            // Preview and apply to Go
+            previewD2();
+        }
+
+        // Setup handlers after SVG loads
+        const svgObserver = new MutationObserver(() => {
+            setupDiagramClickHandlers();
+        });
+        svgObserver.observe(document.getElementById('diagram'), { childList: true, subtree: true });
     </script>
 </body>
 </html>`
