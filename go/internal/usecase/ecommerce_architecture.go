@@ -130,7 +130,7 @@ func defineNodes(a *domain.Architecture) *nodesContainer {
 	nc.Admin = a.DefineNode("admin", domain.Actor, "Admin", "A staff member who manages products and orders.",
 		domain.WithOwner("ops-team", "CC-1000"))
 
-	nc.System = a.DefineNode("ecommerce-system", domain.System, "E-Commerce Platform", "The overall e-commerce system containing microservices.",
+	nc.System = a.DefineNode("ecommerce-system", domain.System, "A-Commerce Platform", "The overall e-commerce system containing microservices.",
 		domain.WithOwner("platform-team", "CC-2000"))
 
 	nc.LB = a.DefineNode("load-balancer", domain.Service, "Load Balancer", "High-availability entry point that distributes traffic to API Gateways.",

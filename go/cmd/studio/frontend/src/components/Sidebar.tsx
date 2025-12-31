@@ -31,41 +31,43 @@ const Sidebar = ({ selectedNode, onUpdate, onDelete, onClose }: SidebarProps) =>
   };
 
   return (
-    <aside className="fixed right-0 top-0 h-full w-80 bg-white shadow-xl border-l border-gray-200 z-50 flex flex-col">
-      <div className="p-4 border-bottom bg-gray-50 flex justify-between items-center">
-        <h2 className="font-bold text-gray-700">Node Properties</h2>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+    <aside className="absolute right-0 top-0 h-full w-80 bg-slate-900 shadow-2xl border-l border-slate-800 z-[100] flex flex-col animate-in slide-in-from-right duration-200">
+      <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex justify-between items-center">
+        <h2 className="font-bold text-slate-200 flex items-center gap-2">
+          Node Properties
+        </h2>
+        <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors">
           <X size={20} />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Unique ID</label>
+      <div className="flex-1 overflow-y-auto p-4 space-y-5">
+        <div className="space-y-1">
+          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Unique ID</label>
           <input 
             type="text" 
-            className="w-full p-2 bg-gray-100 border border-gray-200 rounded text-sm text-gray-600" 
+            className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-sm text-slate-400 cursor-not-allowed" 
             value={selectedNode.id} 
             readOnly 
           />
         </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Name</label>
+        <div className="space-y-1">
+          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Name</label>
           <input 
             name="name"
             type="text" 
-            className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
+            className="w-full p-2 bg-slate-800 border border-slate-700 rounded text-sm text-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all" 
             value={formData.name || ''} 
             onChange={handleChange}
           />
         </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Type</label>
+        <div className="space-y-1">
+          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Type</label>
           <select 
             name="node-type"
-            className="w-full p-2 border border-gray-300 rounded text-sm outline-none"
+            className="w-full p-2 bg-slate-800 border border-slate-700 rounded text-sm text-slate-200 outline-none focus:border-blue-500 transition-all"
             value={formData['node-type'] || ''}
             onChange={handleChange}
           >
@@ -77,38 +79,42 @@ const Sidebar = ({ selectedNode, onUpdate, onDelete, onClose }: SidebarProps) =>
           </select>
         </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Owner</label>
+        <div className="space-y-1">
+          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Owner</label>
           <input 
             name="owner"
             type="text" 
-            className="w-full p-2 border border-gray-300 rounded text-sm outline-none" 
+            className="w-full p-2 bg-slate-800 border border-slate-700 rounded text-sm text-slate-200 focus:border-blue-500 outline-none transition-all" 
             value={formData.owner || ''} 
             onChange={handleChange}
           />
         </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Description</label>
+        <div className="space-y-1">
+          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Description</label>
           <textarea 
             name="description"
-            className="w-full p-2 border border-gray-300 rounded text-sm outline-none h-24" 
+            className="w-full p-2 bg-slate-800 border border-slate-700 rounded text-sm text-slate-200 outline-none focus:border-blue-500 transition-all h-24 resize-none" 
             value={formData.description || ''} 
             onChange={handleChange}
           />
         </div>
       </div>
 
-      <div className="p-4 border-t bg-gray-50 space-y-2">
+      <div className="p-4 border-t border-slate-800 bg-slate-900/50 space-y-3">
         <button 
           onClick={handleSave}
-          className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-2 rounded font-medium hover:bg-blue-700 transition-colors"
+          className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-2.5 rounded-md font-semibold hover:bg-blue-500 transition-all shadow-lg active:scale-95"
         >
           <Save size={16} /> Save Changes
         </button>
         <button 
-          onClick={() => onDelete(selectedNode.id)}
-          className="w-full flex items-center justify-center gap-2 bg-white text-red-600 border border-red-200 py-2 rounded font-medium hover:bg-red-50 transition-colors"
+          onClick={() => {
+            if (confirm('Are you sure you want to delete this node? This will update the Go source code.')) {
+              onDelete(selectedNode.id);
+            }
+          }}
+          className="w-full flex items-center justify-center gap-2 bg-slate-800 text-red-400 border border-slate-700 py-2.5 rounded-md font-semibold hover:bg-red-950/30 hover:text-red-300 transition-all active:scale-95"
         >
           <Trash2 size={16} /> Delete Node
         </button>

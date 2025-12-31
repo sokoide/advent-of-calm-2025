@@ -4,6 +4,10 @@ node_modules/
 .vscode/settings.json
 **/.docusaurus/
 
+# tmp files
+coverage.out
+go/architectures/layout/
+
 # AI
 .serena/
 conductor/archive/

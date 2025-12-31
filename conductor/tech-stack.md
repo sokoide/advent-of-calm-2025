@@ -9,6 +9,8 @@
 
 ## Tools & Utilities
 - **React Flow**: インタラクティブなダイアグラムエディタの基盤。
+- **Monaco Editor (@monaco-editor/react)**: ブラウザ上での高度なコード編集環境。
+- **React Resizable Panels**: リサイズ可能な分割レイアウトの実現。
 - **Go AST (go/ast)**: Go ソースコードの解析・自動書き換えエンジン。
 - **Vite / React / Tailwind CSS 4**: モダンなフロントエンド開発スタック。
 - **calm-cli**: 生成されたJSONのスキーマバリデーションおよびテンプレート処理。
