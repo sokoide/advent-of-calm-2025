@@ -22,3 +22,11 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: vi.fn(),
   })),
 })
+
+class MockWebSocket {
+  onmessage: ((event: MessageEvent) => void) | null = null
+  constructor(_url: string) {}
+  close() {}
+}
+
+;(globalThis as any).WebSocket = MockWebSocket

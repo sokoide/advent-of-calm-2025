@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { 
   useNodesState, 
   useEdgesState,
@@ -7,7 +7,6 @@ import {
   type Connection,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import axios from 'axios';
 import { 
   Monitor, 
   Code2, 
@@ -23,12 +22,14 @@ import * as Resizable from 'react-resizable-panels';
 
 import { transformToReactFlow } from './utils/transformer';
 import { getLayoutedElements } from './utils/layout';
-import type { CalmArchitecture, LayoutData, CalmNode } from './types/calm';
+import type { CalmArchitecture, CalmNode, LayoutData } from './domain/calm';
+import { buildParentMap, parentMapEquals } from './domain/architecture';
+import { StudioAPIClient } from './infra/studioApi';
+import { StudioRealtime } from './infra/studioRealtime';
+import { StudioUseCase } from './usecase/studio';
 import Sidebar from './components/Sidebar';
 import DiagramView from './components/DiagramView';
 import CodeEditor from './components/CodeEditor';
-
-const BASE_URL = window.location.origin;
 
 type TabType = 'merged' | 'diagram' | 'go' | 'json' | 'd2-diagram' | 'd2-dsl';
 
@@ -44,8 +45,6 @@ function App() {
     setSelectedNode(null);
   }, [activeTab]);
 
-  const ws = useRef<WebSocket | null>(null);
-  
   // Content states
   const [goCode, setGoCode] = useState('');
   const [d2Code, setD2Code] = useState('');
@@ -61,26 +60,14 @@ function App() {
   // Flag to avoid re-fetching while we are typing
   const isUpdating = useRef(false);
 
-  const buildParentMap = useCallback((arch: CalmArchitecture) => {
-    const map: Record<string, string> = {};
-    arch.relationships.forEach((rel) => {
-      const composed = rel['relationship-type']?.['composed-of'];
-      if (!composed) return;
-      const container = composed.container;
-      composed.nodes.forEach((childId) => {
-        map[childId] = container;
-      });
-    });
-    return map;
-  }, []);
-
-  const sameParentMap = useCallback((a: Record<string, string> | undefined, b: Record<string, string>) => {
-    const aMap = a || {};
-    const aKeys = Object.keys(aMap);
-    const bKeys = Object.keys(b);
-    if (aKeys.length !== bKeys.length) return false;
-    return aKeys.every((key) => aMap[key] === b[key]);
-  }, []);
+  const studio = useMemo(
+    () =>
+      new StudioUseCase(
+        new StudioAPIClient(window.location.origin),
+        new StudioRealtime(window.location.host, window.location.protocol)
+      ),
+    []
+  );
 
   const saveLayout = useCallback(async (currentNodes: Node[]) => {
     if (!archId) return;
@@ -92,11 +79,11 @@ function App() {
           newLayout.parentMap![n.id] = n.parentNode;
         }
       });
-      await axios.post(`${BASE_URL}/layout?id=${archId}`, newLayout);
+      await studio.saveLayout(archId, newLayout);
     } catch (err) {
       console.error('Failed to save layout:', err);
     }
-  }, [archId]);
+  }, [archId, studio]);
 
   const onResetLayout = useCallback(() => {
     const layouted = getLayoutedElements(nodes, edges, 'LR');
@@ -113,8 +100,7 @@ function App() {
   const fetchData = useCallback(async (isWSUpdate = false) => {
     if (isUpdating.current && !isWSUpdate) return;
     try {
-      const contentResp = await axios.get(`${BASE_URL}/content`);
-      const { goCode: remoteGo, d2Code: remoteD2, json, svg } = contentResp.data;
+      const { goCode: remoteGo, d2Code: remoteD2, json, svg } = await studio.fetchContent();
       
       setGoCode(remoteGo);
       setD2Code(remoteD2);
@@ -131,14 +117,13 @@ function App() {
       setJsonCode(JSON.stringify(arch, null, 2));
       setArchId(archUniqueID);
 
-      const layoutResp = await axios.get(`${BASE_URL}/layout?id=${archUniqueID}`);
-      const layout: LayoutData = layoutResp.data;
+      const layout = await studio.fetchLayout(archUniqueID);
 
       const { nodes: initialNodes, edges: initialEdges } = transformToReactFlow(arch, layout);
       const currentParentMap = buildParentMap(arch);
       
       const hasStoredLayout = layout.nodes && Object.keys(layout.nodes).length > 0;
-      const parentMapMatches = sameParentMap(layout.parentMap, currentParentMap);
+      const parentMapMatches = parentMapEquals(layout.parentMap, currentParentMap);
       if (!hasStoredLayout || !parentMapMatches) {
         const layouted = getLayoutedElements(initialNodes, initialEdges, 'LR');
         setNodes(layouted.nodes);
@@ -153,23 +138,19 @@ function App() {
     } finally {
       setLoading(false);
     }
-  }, [setNodes, setEdges, saveLayout, buildParentMap, sameParentMap]);
+  }, [setNodes, setEdges, saveLayout, studio]);
 
   useEffect(() => {
     fetchData();
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
-    
-    socket.onmessage = (event) => {
-      if (event.data === 'refresh' || event.data === 'refresh-svg') {
+    const disconnect = studio.connectRealtime((message) => {
+      if (message === 'refresh' || message === 'refresh-svg') {
         fetchData(true);
       }
-    };
+    });
 
-    ws.current = socket;
-    return () => socket.close();
-  }, [fetchData]);
+    return () => disconnect();
+  }, [fetchData, studio]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((prev) => addEdge(params, prev)),
@@ -199,7 +180,7 @@ function App() {
     setNodes((nds) => nds.concat(newNode));
     saveLayout(nodes.concat(newNode));
 
-    await axios.post(`${BASE_URL}/sync-ast`, {
+    await studio.syncAST({
       action: 'add',
       nodeId: id,
       nodeType: 'Service',
@@ -207,40 +188,40 @@ function App() {
       desc: '',
     });
     fetchData(true);
-  }, [nodes, setNodes, saveLayout, fetchData]);
+  }, [nodes, setNodes, saveLayout, fetchData, studio]);
 
   const onUpdateNode = useCallback(async (id: string, updatedCalm: Partial<CalmNode>) => {
     if (updatedCalm.name) {
-      await axios.post(`${BASE_URL}/sync-ast`, { action: 'update', nodeId: id, property: 'name', value: updatedCalm.name });
+      await studio.syncAST({ action: 'update', nodeId: id, property: 'name', value: updatedCalm.name });
     }
     if (updatedCalm.owner) {
-      await axios.post(`${BASE_URL}/sync-ast`, { action: 'update', nodeId: id, property: 'owner', value: updatedCalm.owner });
+      await studio.syncAST({ action: 'update', nodeId: id, property: 'owner', value: updatedCalm.owner });
     }
     fetchData(true);
-  }, [fetchData]);
+  }, [fetchData, studio]);
 
   const onDeleteNode = useCallback(async (id: string) => {
-    await axios.post(`${BASE_URL}/sync-ast`, { action: 'delete', nodeId: id });
+    await studio.syncAST({ action: 'delete', nodeId: id });
     setSelectedNode(null);
     fetchData(true);
-  }, [fetchData]);
+  }, [fetchData, studio]);
 
   const handleGoCodeChange = async (val: string | undefined) => {
     if (val === undefined) return;
     setGoCode(val);
     isUpdating.current = true;
-    await axios.post(`${BASE_URL}/update`, { type: 'go', content: val });
+    await studio.updateGo(val);
     setTimeout(() => { isUpdating.current = false; }, 1000);
   };
 
   const handleApplyJSON = async () => {
     try {
-      const resp = await axios.post(`${BASE_URL}/preview-json-sync`, { json: jsonCode });
-      if (resp.data.error) {
-        alert('Validation Error: ' + resp.data.error);
+      const resp = await studio.previewJSONSync(jsonCode);
+      if (resp.error) {
+        alert('Validation Error: ' + resp.error);
         return;
       }
-      setPreviewCode(resp.data.newCode);
+      setPreviewCode(resp.newCode ?? '');
       setShowDiff(true);
     } catch (err) {
       alert('Failed to generate preview');
@@ -250,7 +231,7 @@ function App() {
   const confirmApply = async () => {
     try {
       isUpdating.current = true;
-      await axios.post(`${BASE_URL}/update`, { type: 'go', content: previewCode });
+      await studio.updateGo(previewCode);
       setShowDiff(false);
       setTimeout(async () => {
         await fetchData(true);

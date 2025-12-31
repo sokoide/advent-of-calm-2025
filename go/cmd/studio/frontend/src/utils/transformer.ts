@@ -1,5 +1,5 @@
 import { type Node, type Edge } from 'reactflow';
-import type { CalmArchitecture, LayoutData } from '../types/calm';
+import type { CalmArchitecture, LayoutData } from '../domain/calm';
 
 export const transformToReactFlow = (
   arch: CalmArchitecture,

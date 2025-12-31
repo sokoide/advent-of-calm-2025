@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { type Node } from 'reactflow';
 import { X, Trash2, Save } from 'lucide-react';
-import type { CalmNode } from '../types/calm';
+import type { CalmNode } from '../domain/calm';
 
 interface SidebarProps {
   selectedNode: Node | null;
