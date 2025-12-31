@@ -58,4 +58,5 @@ export interface CalmTransition {
 
 export interface LayoutData {
   nodes: Record<string, { x: number; y: number }>;
+  parentMap?: Record<string, string>;
 }

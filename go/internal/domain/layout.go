@@ -9,12 +9,14 @@ type NodeLayout struct {
 // ArchitectureLayout stores layout information for all nodes in an architecture.
 // This is stored as a sidecar JSON file.
 type ArchitectureLayout struct {
-	Nodes map[string]NodeLayout `json:"nodes"`
+	Nodes     map[string]NodeLayout `json:"nodes"`
+	ParentMap map[string]string     `json:"parentMap,omitempty"`
 }
 
 // NewArchitectureLayout creates an initialized layout.
 func NewArchitectureLayout() *ArchitectureLayout {
 	return &ArchitectureLayout{
-		Nodes: make(map[string]NodeLayout),
+		Nodes:     make(map[string]NodeLayout),
+		ParentMap: make(map[string]string),
 	}
 }

@@ -54,39 +54,43 @@ function App() {
   const [archId, setArchId] = useState('');
   const [showDiff, setShowDiff] = useState(false);
   const [previewCode, setPreviewCode] = useState('');
+  const [d2Zoom, setD2Zoom] = useState(1);
+  const [d2Pan, setD2Pan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
 
   // Flag to avoid re-fetching while we are typing
   const isUpdating = useRef(false);
 
+  const buildParentMap = useCallback((arch: CalmArchitecture) => {
+    const map: Record<string, string> = {};
+    arch.relationships.forEach((rel) => {
+      const composed = rel['relationship-type']?.['composed-of'];
+      if (!composed) return;
+      const container = composed.container;
+      composed.nodes.forEach((childId) => {
+        map[childId] = container;
+      });
+    });
+    return map;
+  }, []);
+
+  const sameParentMap = useCallback((a: Record<string, string> | undefined, b: Record<string, string>) => {
+    const aMap = a || {};
+    const aKeys = Object.keys(aMap);
+    const bKeys = Object.keys(b);
+    if (aKeys.length !== bKeys.length) return false;
+    return aKeys.every((key) => aMap[key] === b[key]);
+  }, []);
+
   const saveLayout = useCallback(async (currentNodes: Node[]) => {
     if (!archId) return;
     try {
-      const nodeMap = new Map(currentNodes.map(n => [n.id, n]));
-      const absCache = new Map<string, { x: number, y: number }>();
-
-      const resolveAbsolute = (id: string): { x: number, y: number } => {
-        const cached = absCache.get(id);
-        if (cached) return cached;
-        const node = nodeMap.get(id);
-        if (!node) return { x: 0, y: 0 };
-
-        if (!node.parentNode) {
-          absCache.set(id, node.position);
-          return node.position;
+      const newLayout: LayoutData = { nodes: {}, parentMap: {} };
+      currentNodes.forEach((n) => {
+        newLayout.nodes[n.id] = n.position;
+        if (n.parentNode) {
+          newLayout.parentMap![n.id] = n.parentNode;
         }
-
-        const parentPos = resolveAbsolute(node.parentNode);
-        const absPos = {
-          x: parentPos.x + node.position.x,
-          y: parentPos.y + node.position.y
-        };
-        absCache.set(id, absPos);
-        return absPos;
-      };
-
-      const newLayout: LayoutData = { nodes: {} };
-      currentNodes.forEach(n => {
-        newLayout.nodes[n.id] = resolveAbsolute(n.id);
       });
       await axios.post(`${BASE_URL}/layout?id=${archId}`, newLayout);
     } catch (err) {
@@ -131,9 +135,11 @@ function App() {
       const layout: LayoutData = layoutResp.data;
 
       const { nodes: initialNodes, edges: initialEdges } = transformToReactFlow(arch, layout);
+      const currentParentMap = buildParentMap(arch);
       
       const hasStoredLayout = layout.nodes && Object.keys(layout.nodes).length > 0;
-      if (!hasStoredLayout) {
+      const parentMapMatches = sameParentMap(layout.parentMap, currentParentMap);
+      if (!hasStoredLayout || !parentMapMatches) {
         const layouted = getLayoutedElements(initialNodes, initialEdges, 'LR');
         setNodes(layouted.nodes);
         setEdges(initialEdges);
@@ -147,7 +153,7 @@ function App() {
     } finally {
       setLoading(false);
     }
-  }, [setNodes, setEdges, saveLayout]);
+  }, [setNodes, setEdges, saveLayout, buildParentMap, sameParentMap]);
 
   useEffect(() => {
     fetchData();
@@ -364,13 +370,66 @@ function App() {
 
         {activeTab === 'd2-diagram' && (
           <div className="flex flex-col h-full bg-slate-900 overflow-hidden">
-            <div className="flex-1 overflow-auto bg-slate-800 p-8 flex items-start justify-center">
+            <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-800 bg-slate-900/70">
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">D2 Diagram</span>
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={() => setD2Zoom((z) => Math.max(0.5, Math.round((z - 0.1) * 10) / 10))}
+                  className="px-2.5 py-1 text-xs rounded border border-slate-700 text-slate-300 hover:bg-slate-800"
+                >
+                  −
+                </button>
+                <span className="text-xs text-slate-400 w-12 text-center">{Math.round(d2Zoom * 100)}%</span>
+                <button
+                  onClick={() => setD2Zoom((z) => Math.min(2.5, Math.round((z + 0.1) * 10) / 10))}
+                  className="px-2.5 py-1 text-xs rounded border border-slate-700 text-slate-300 hover:bg-slate-800"
+                >
+                  +
+                </button>
+                <button
+                  onClick={() => {
+                    setD2Zoom(1);
+                    setD2Pan({ x: 0, y: 0 });
+                  }}
+                  className="px-2.5 py-1 text-xs rounded border border-slate-700 text-slate-300 hover:bg-slate-800"
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+            <div
+              className="flex-1 overflow-hidden bg-slate-800 p-6"
+              onMouseLeave={() => setIsPanning(false)}
+            >
               {svgCode ? (
-                <div 
-                  className="bg-white rounded-xl shadow-2xl p-8"
-                  style={{ minWidth: '800px' }}
-                  dangerouslySetInnerHTML={{ __html: svgCode.replace('<svg ', '<svg style="width:100%;height:auto;" ') }} 
-                />
+                <div
+                  className={`bg-white rounded-xl shadow-2xl p-6 w-full h-full select-none ${
+                    isPanning ? 'cursor-grabbing' : 'cursor-grab'
+                  }`}
+                  onMouseDown={(event) => {
+                    if (event.button !== 0) return;
+                    setIsPanning(true);
+                  }}
+                  onMouseUp={() => setIsPanning(false)}
+                  onMouseMove={(event) => {
+                    if (!isPanning) return;
+                    setD2Pan((prev) => ({
+                      x: prev.x + event.movementX,
+                      y: prev.y + event.movementY,
+                    }));
+                  }}
+                >
+                  <div
+                    style={{
+                      transform: `translate(${d2Pan.x}px, ${d2Pan.y}px) scale(${d2Zoom})`,
+                      transformOrigin: '0 0',
+                      width: '100%',
+                    }}
+                    dangerouslySetInnerHTML={{
+                      __html: svgCode.replace('<svg ', '<svg style="width:100%;height:auto;" '),
+                    }}
+                  />
+                </div>
               ) : (
                 <div className="flex flex-col h-full items-center justify-center text-slate-500">
                   <RefreshCw className="animate-spin mb-4" size={32} />
