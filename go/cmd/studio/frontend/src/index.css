@@ -9,3 +9,9 @@ body {
   min-width: 320px;
   min-height: 100vh;
 }
+
+.system-group {
+  border: 2px dashed #64748b !important;
+  background-color: rgba(30, 41, 59, 0.5) !important;
+  border-radius: 12px !important;
+}

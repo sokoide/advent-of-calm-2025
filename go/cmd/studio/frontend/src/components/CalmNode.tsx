@@ -13,6 +13,27 @@ const icons: Record<string, any> = {
 const CalmNode = ({ data, selected }: NodeProps) => {
   const type = data.calm['node-type'];
   const Icon = icons[type] || Box;
+  const isContainer = data.isContainer === true;
+
+  if (isContainer) {
+    return (
+      <div
+        className={`w-full h-full rounded-xl border shadow-inner ${
+          selected ? 'border-blue-500/70 ring-2 ring-blue-500/20' : 'border-slate-700/60'
+        } bg-slate-900/40`}
+      >
+        <div className="flex items-center gap-3 px-4 py-3">
+          <div className="rounded-full w-8 h-8 flex items-center justify-center bg-slate-800">
+            <Icon size={16} className="text-blue-400" />
+          </div>
+          <div>
+            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">{type}</div>
+            <div className="text-sm font-semibold text-slate-200">{data.label}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`px-4 py-2 shadow-xl rounded-lg bg-slate-900 border-2 transition-all ${selected ? 'border-blue-500 ring-2 ring-blue-500/20 scale-105 z-50' : 'border-slate-800'}`}>

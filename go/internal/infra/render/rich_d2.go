@@ -39,42 +39,57 @@ func (RichD2Renderer) Render(a *domain.Architecture) (string, error) {
 	sb.WriteString("}\n\n")
 
 	// Track composed nodes
-	composedNodes := make(map[string]string)
-	containers := make(map[string][]string)
+	nodeToParent := make(map[string]string)
+	parentToChildren := make(map[string][]string)
+	nodeByID := make(map[string]*domain.Node)
+
+	for _, node := range a.Nodes {
+		nodeByID[node.UniqueID] = node
+	}
 
 	for _, rel := range a.Relationships {
 		if rel.RelationshipType.ComposedOf != nil {
 			container, _ := rel.RelationshipType.ComposedOf["container"].(string)
 			if nodes, ok := rel.RelationshipType.ComposedOf["nodes"].([]string); ok {
 				for _, n := range nodes {
-					composedNodes[n] = container
+					if _, exists := nodeToParent[n]; exists {
+						continue
+					}
+					nodeToParent[n] = container
+					parentToChildren[container] = append(parentToChildren[container], n)
 				}
-				containers[container] = append(containers[container], nodes...)
 			}
 		}
 	}
 
-	// Generate containers (systems) with their contents
-	for _, node := range a.Nodes {
-		if node.NodeType == domain.System {
-			if containedNodes, isContainer := containers[node.UniqueID]; isContainer {
-				// Write container opening with contents inside
-				writeRichContainerNode(&sb, node, containedNodes, a.Nodes)
-				sb.WriteString("\n")
-			}
+	// Recursive function to render nodes and nested containers.
+	var writeNodeRecursive func(id string, indent string)
+	writeNodeRecursive = func(nodeID string, indent string) {
+		targetNode := nodeByID[nodeID]
+		if targetNode == nil {
+			return
 		}
-	}
 
-	// Generate standalone nodes
-	for _, node := range a.Nodes {
-		if _, inContainer := composedNodes[node.UniqueID]; !inContainer {
-			if node.NodeType == domain.System {
-				if _, isContainer := containers[node.UniqueID]; isContainer {
-					continue
-				}
-			}
-			writeRichNode(&sb, node, "")
+		children := parentToChildren[nodeID]
+		if len(children) == 0 {
+			writeRichNode(&sb, targetNode, indent)
 			sb.WriteString("\n")
+			return
+		}
+
+		writeRichContainerHeader(&sb, targetNode, indent)
+		for _, childID := range children {
+			if currentParent, ok := nodeToParent[childID]; ok && currentParent == nodeID {
+				writeNodeRecursive(childID, indent+"  ")
+			}
+		}
+		sb.WriteString(indent + "}\n\n")
+	}
+
+	// Render top-level nodes (those without parents).
+	for _, node := range a.Nodes {
+		if _, hasParent := nodeToParent[node.UniqueID]; !hasParent {
+			writeNodeRecursive(node.UniqueID, "")
 		}
 	}
 
@@ -86,8 +101,8 @@ func (RichD2Renderer) Render(a *domain.Architecture) (string, error) {
 			src := rel.RelationshipType.Connects.Source.Node
 			dst := rel.RelationshipType.Connects.Destination.Node
 
-			srcPath := getNodePath(src, composedNodes)
-			dstPath := getNodePath(dst, composedNodes)
+			srcPath := getFullD2Path(src, nodeToParent)
+			dstPath := getFullD2Path(dst, nodeToParent)
 
 			// Build label
 			label := ""
@@ -146,7 +161,7 @@ func (RichD2Renderer) Render(a *domain.Architecture) (string, error) {
 			actor, _ := rel.RelationshipType.Interacts["actor"].(string)
 			if nodes, ok := rel.RelationshipType.Interacts["nodes"].([]string); ok {
 				for _, n := range nodes {
-					dstPath := getNodePath(n, composedNodes)
+					dstPath := getFullD2Path(n, nodeToParent)
 					sb.WriteString(fmt.Sprintf("%s -> %s {\n", sanitizeID(actor), dstPath))
 					sb.WriteString(fmt.Sprintf("  # @calm:id=%s\n", rel.UniqueID))
 					sb.WriteString(fmt.Sprintf("  # @calm:type=interacts\n"))
@@ -195,7 +210,7 @@ func (RichD2Renderer) Render(a *domain.Architecture) (string, error) {
 	return sb.String(), nil
 }
 
-func writeRichNode(sb *strings.Builder, node *domain.Node, indent string) {
+func writeRichContainerHeader(sb *strings.Builder, node *domain.Node, indent string) {
 	id := sanitizeID(node.UniqueID)
 	className := strings.ToLower(string(node.NodeType))
 
@@ -220,6 +235,10 @@ func writeRichNode(sb *strings.Builder, node *domain.Node, indent string) {
 	if len(node.Metadata) > 0 {
 		sb.WriteString(fmt.Sprintf("%s  # @calm:metadata=%s\n", indent, toJSON(node.Metadata)))
 	}
+}
+
+func writeRichNode(sb *strings.Builder, node *domain.Node, indent string) {
+	writeRichContainerHeader(sb, node, indent)
 
 	// Interfaces as JSON
 	if len(node.Interfaces) > 0 {
@@ -243,6 +262,21 @@ func escapeD2String(s string) string {
 func toJSON(v any) string {
 	data, _ := json.Marshal(v)
 	return string(data)
+}
+
+func getFullD2Path(nodeID string, composedNodes map[string]string) string {
+	segments := []string{sanitizeID(nodeID)}
+	seen := make(map[string]bool)
+	for {
+		parent, ok := composedNodes[nodeID]
+		if !ok || seen[parent] {
+			break
+		}
+		seen[parent] = true
+		segments = append([]string{sanitizeID(parent)}, segments...)
+		nodeID = parent
+	}
+	return strings.Join(segments, ".")
 }
 
 // writeRichContainerNode writes a container node with its children in a single D2 block.

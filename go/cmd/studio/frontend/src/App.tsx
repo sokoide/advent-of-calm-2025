@@ -61,9 +61,32 @@ function App() {
   const saveLayout = useCallback(async (currentNodes: Node[]) => {
     if (!archId) return;
     try {
+      const nodeMap = new Map(currentNodes.map(n => [n.id, n]));
+      const absCache = new Map<string, { x: number, y: number }>();
+
+      const resolveAbsolute = (id: string): { x: number, y: number } => {
+        const cached = absCache.get(id);
+        if (cached) return cached;
+        const node = nodeMap.get(id);
+        if (!node) return { x: 0, y: 0 };
+
+        if (!node.parentNode) {
+          absCache.set(id, node.position);
+          return node.position;
+        }
+
+        const parentPos = resolveAbsolute(node.parentNode);
+        const absPos = {
+          x: parentPos.x + node.position.x,
+          y: parentPos.y + node.position.y
+        };
+        absCache.set(id, absPos);
+        return absPos;
+      };
+
       const newLayout: LayoutData = { nodes: {} };
       currentNodes.forEach(n => {
-        newLayout.nodes[n.id] = n.position;
+        newLayout.nodes[n.id] = resolveAbsolute(n.id);
       });
       await axios.post(`${BASE_URL}/layout?id=${archId}`, newLayout);
     } catch (err) {
@@ -73,9 +96,14 @@ function App() {
 
   const onResetLayout = useCallback(() => {
     const layouted = getLayoutedElements(nodes, edges, 'LR');
-    setNodes([...layouted.nodes]);
+    // Ensure we trigger a state update with fresh objects
+    const refreshedNodes = layouted.nodes.map(n => ({
+      ...n,
+      position: { ...n.position }
+    }));
+    setNodes(refreshedNodes);
     setEdges([...layouted.edges]);
-    saveLayout(layouted.nodes);
+    saveLayout(refreshedNodes);
   }, [nodes, edges, setNodes, setEdges, saveLayout]);
 
   const fetchData = useCallback(async (isWSUpdate = false) => {
@@ -108,7 +136,7 @@ function App() {
       if (!hasStoredLayout) {
         const layouted = getLayoutedElements(initialNodes, initialEdges, 'LR');
         setNodes(layouted.nodes);
-        setEdges(initialEdges); // initialEdges are not changed by layout currently
+        setEdges(initialEdges);
         setTimeout(() => saveLayout(layouted.nodes), 1000);
       } else {
         setNodes(initialNodes);
@@ -124,13 +152,11 @@ function App() {
   useEffect(() => {
     fetchData();
 
-    // Setup WebSocket
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
     
     socket.onmessage = (event) => {
       if (event.data === 'refresh' || event.data === 'refresh-svg') {
-        console.log(`🔄 Remote change detected (${event.data}), refreshing...`);
         fetchData(true);
       }
     };
@@ -220,7 +246,6 @@ function App() {
       isUpdating.current = true;
       await axios.post(`${BASE_URL}/update`, { type: 'go', content: previewCode });
       setShowDiff(false);
-      // Wait a bit for file watcher to potentially trigger, then fetch
       setTimeout(async () => {
         await fetchData(true);
         isUpdating.current = false;
@@ -241,7 +266,6 @@ function App() {
       onConnect={onConnect}
       onNodeDragStop={onNodeDragStop}
       onNodeClick={(_, node) => {
-        console.log('Node clicked:', node.id);
         setSelectedNode(node);
       }}
       onPaneClick={() => setSelectedNode(null)}
@@ -328,7 +352,7 @@ function App() {
               <button onClick={() => alert('Validation not implemented yet')} className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs font-medium border border-slate-700 transition-colors">
                 <CheckCircle2 size={12} /> Validate JSON
               </button>
-              <button onClick={handleApplyJSON} className="flex items-center gap-2 px-3 py-1.5 bg-green-700 hover:bg-green-600 rounded text-xs font-medium text-white shadow-md transition-colors">
+              <button onClick={handleApplyJSON} className="flex items-center gap-2 px-3 py-1.5 bg-green-700 hover:bg-green-600 rounded text-xs font-medium text-white shadow-md transition-all active:scale-95">
                 <Save size={12} /> Apply to Go DSL
               </button>
             </div>

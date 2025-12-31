@@ -33,55 +33,77 @@ func (D2Renderer) Render(a *domain.Architecture) (string, error) {
 	sb.WriteString("}\n\n")
 
 	// Track composed nodes
-	composedNodes := make(map[string]string) // node -> container
-	containers := make(map[string][]string)  // container -> nodes
+	nodeToParent := make(map[string]string)       // node -> direct parent
+	parentToChildren := make(map[string][]string) // parent -> direct children
+	nodeByID := make(map[string]*domain.Node)
+	for _, node := range a.Nodes {
+		nodeByID[node.UniqueID] = node
+	}
 
 	for _, rel := range a.Relationships {
 		if rel.RelationshipType.ComposedOf != nil {
 			container, _ := rel.RelationshipType.ComposedOf["container"].(string)
 			if nodes, ok := rel.RelationshipType.ComposedOf["nodes"].([]string); ok {
 				for _, n := range nodes {
-					composedNodes[n] = container
-				}
-				containers[container] = append(containers[container], nodes...)
-			}
-		}
-	}
-
-	// Generate containers (systems) first
-	for _, node := range a.Nodes {
-		if node.NodeType == domain.System {
-			if containedNodes, isContainer := containers[node.UniqueID]; isContainer {
-				// This is a container with children
-				sb.WriteString(fmt.Sprintf("%s: %s {\n", sanitizeID(node.UniqueID), node.Name))
-				sb.WriteString("  class: system\n")
-
-				// Add contained nodes
-				for _, containedID := range containedNodes {
-					for _, n := range a.Nodes {
-						if n.UniqueID == containedID {
-							writeNode(&sb, n, "  ")
-							break
-						}
+					if _, exists := nodeToParent[n]; exists {
+						continue
 					}
+					nodeToParent[n] = container
+					parentToChildren[container] = append(parentToChildren[container], n)
 				}
-
-				sb.WriteString("}\n\n")
 			}
 		}
 	}
 
-	// Generate standalone nodes (not in containers)
-	for _, node := range a.Nodes {
-		if _, inContainer := composedNodes[node.UniqueID]; !inContainer {
-			// Skip systems that are containers (already handled)
-			if node.NodeType == domain.System {
-				if _, isContainer := containers[node.UniqueID]; isContainer {
-					continue
+	// Recursive function to write node and its children
+	var writeNodeRecursive func(id string, indent string)
+	writeNodeRecursive = func(nodeID string, indent string) {
+		targetNode := nodeByID[nodeID]
+		if targetNode == nil {
+			return
+		}
+
+		id := sanitizeID(targetNode.UniqueID)
+		children := parentToChildren[nodeID]
+
+		if len(children) > 0 {
+			// It's a container
+			sb.WriteString(fmt.Sprintf("%s%s: %s {\n", indent, id, targetNode.Name))
+			sb.WriteString(fmt.Sprintf("%s  class: %s\n", indent, strings.ToLower(string(targetNode.NodeType))))
+			for _, childID := range children {
+				// Verify if this node is still the valid parent
+				if currentParent, ok := nodeToParent[childID]; ok && currentParent == nodeID {
+					writeNodeRecursive(childID, indent+"  ")
 				}
 			}
-			writeNode(&sb, node, "")
+			sb.WriteString(indent + "}\n")
+		} else {
+			// It's a leaf node
+			writeNode(&sb, targetNode, indent)
 		}
+	}
+
+	// 1. Generate top-level nodes (those without parents)
+	for _, node := range a.Nodes {
+		if _, hasParent := nodeToParent[node.UniqueID]; !hasParent {
+			writeNodeRecursive(node.UniqueID, "")
+		}
+	}
+
+	// Helper to get full D2 path for a node (e.g., parent.child.node)
+	getFullD2Path := func(nodeID string) string {
+		segments := []string{sanitizeID(nodeID)}
+		seen := make(map[string]bool)
+		for {
+			parent, ok := nodeToParent[nodeID]
+			if !ok || seen[parent] {
+				break
+			}
+			seen[parent] = true
+			segments = append([]string{sanitizeID(parent)}, segments...)
+			nodeID = parent
+		}
+		return strings.Join(segments, ".")
 	}
 
 	sb.WriteString("\n# Relationships\n")
@@ -92,9 +114,8 @@ func (D2Renderer) Render(a *domain.Architecture) (string, error) {
 			src := rel.RelationshipType.Connects.Source.Node
 			dst := rel.RelationshipType.Connects.Destination.Node
 
-			// Handle nodes in containers
-			srcPath := getNodePath(src, composedNodes)
-			dstPath := getNodePath(dst, composedNodes)
+			srcPath := getFullD2Path(src)
+			dstPath := getFullD2Path(dst)
 
 			label := ""
 			if rel.Protocol != "" {
@@ -118,7 +139,7 @@ func (D2Renderer) Render(a *domain.Architecture) (string, error) {
 			actor, _ := rel.RelationshipType.Interacts["actor"].(string)
 			if nodes, ok := rel.RelationshipType.Interacts["nodes"].([]string); ok {
 				for _, n := range nodes {
-					dstPath := getNodePath(n, composedNodes)
+					dstPath := getFullD2Path(n)
 					sb.WriteString(fmt.Sprintf("%s -> %s\n", sanitizeID(actor), dstPath))
 				}
 			}
@@ -175,13 +196,6 @@ func writeNode(sb *strings.Builder, node *domain.Node, indent string) {
 	}
 
 	sb.WriteString(indent + "}\n")
-}
-
-func getNodePath(nodeID string, composedNodes map[string]string) string {
-	if container, ok := composedNodes[nodeID]; ok {
-		return sanitizeID(container) + "." + sanitizeID(nodeID)
-	}
-	return sanitizeID(nodeID)
 }
 
 func sanitizeID(id string) string {

@@ -218,7 +218,7 @@ func regenerate() bool {
 	if err := cmdD2.Run(); err != nil {
 		log.Printf("❌ Rich D2 output error: %v\n%s", err, d2Err.String())
 	} else {
-		log.Printf("📝 Rich D2 output generated (%d bytes)", d2Out.Len())
+		log.Printf("📝 Rich D2 output generated (%d bytes):\n%s", d2Out.Len(), d2Out.String())
 	}
 
 	// 4. Generate SVG from D2
