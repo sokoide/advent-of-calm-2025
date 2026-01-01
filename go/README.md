@@ -66,12 +66,16 @@ Then, open `http://localhost:3000` and explore these tabs:
 - **CALM JSON**: View JSON and perform "Reverse Sync" back to Go.
 - **D2 Diagram**: High-fidelity static view powered by D2.
 
-### Local Tool Agent (Optional)
-If you want the browser UI to use your local Go/D2 toolchain, run the agent:
+### Launching Local Agent + Studio
+If you want to prioritize using your local Go/D2 toolchain, launch both simultaneously:
 ```bash
-go run ./cmd/arch-agent -dir . -port 8787
+make studio-local
 ```
-The frontend will prefer `http://localhost:8787` when available.
+`studio-local` displays logs with `agent:` / `studio:` prefixes.
+
+#### Significance of the Local Agent
+- **Avoid Server Overload**: Conversion (Go DSL → JSON/D2) and SVG generation are executed on the client side, allowing the server to focus on storage and delivery.
+- **Leverage Local Go/D2**: Since conversion and SVG generation use each user's Go compiler and D2 CLI, overall throughput is increased.
 
 ### Other Make Targets
 | Command | Description |

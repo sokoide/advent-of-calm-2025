@@ -1,4 +1,4 @@
-.PHONY: build format run validate diff difftool clean help setup watch diff-arch d2 watch-d2 check studio test test-coverage testcoverage
+.PHONY: build format run validate diff difftool clean help setup watch diff-arch d2 watch-d2 check studio test test-coverage testcoverage studio-local
 
 # デフォルトターゲット
 help:
@@ -19,6 +19,7 @@ help:
 	@echo "  make watch     - ライブサーバーを起動してブラウザで自動更新 (Mermaid)"
 	@echo "  make watch-d2  - ライブサーバーを起動してブラウザで自動更新 (D2)"
 	@echo "  make studio    - CALM Studio (双方向エディタ) を起動します"
+	@echo "  make studio-local - CALM Studio と local agent を同時に起動します"
 	@echo "  make clean     - 生成されたバイナリや一時ファイルを削除します"
 
 # セットアップ: 必要なツールをインストール
@@ -113,6 +114,15 @@ studio: cmd/studio/frontend/dist
 	@echo "🎨 Starting CALM Studio..."
 	@command -v d2 >/dev/null 2>&1 || (echo "❌ d2 が見つかりません。brew install d2 を実行してください。" && exit 1)
 	@cd cmd/studio && go run . ../..
+
+studio-local: cmd/studio/frontend/dist
+	@echo "🧭 Starting local agent + CALM Studio..."
+	@command -v d2 >/dev/null 2>&1 || (echo "❌ d2 が見つかりません。brew install d2 を実行してください。" && exit 1)
+	@bash -c 'set -euo pipefail; \
+		(go run ./cmd/arch-agent -dir . -port 8787 2>&1 | sed -l "s/^/agent: /") & AGENT_PID=$$!; \
+		(go run ./cmd/studio 2>&1 | sed -l "s/^/studio: /") & STUDIO_PID=$$!; \
+		trap "kill $$AGENT_PID $$STUDIO_PID 2>/dev/null || true" INT TERM EXIT; \
+		wait $$AGENT_PID $$STUDIO_PID'
 
 cmd/studio/frontend/dist: cmd/studio/frontend/src/App.tsx
 	@echo "📦 Building frontend..."

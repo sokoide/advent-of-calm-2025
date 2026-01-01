@@ -60,6 +60,7 @@ graph LR
 ### 主要コンポーネント
 
 - **Server (`cmd/studio/main.go`)**: `gorilla/websocket` と標準 `http` パッケージを用いたAPI/WSサーバー。
+- **Local Agent (`cmd/arch-agent`)**: ブラウザからローカルのGo/D2ツールを呼び出すためのHTTPブリッジ。
 - **StudioService (`internal/usecase`)**: レイアウト管理とAST同期のオーケストレーション。
 - **AST Syncer (`internal/infra/ast`)**: `go/ast`, `go/parser`, `go/format` を使用し、DSLファイルをソースレベルで直接書き換えます。UIでのノード追加/削除/更新がGoコードに反映されます。
 - **Layout Repository (`internal/infra/repository`)**: レイアウト（相対座標 + parentMap）を `architectures/layout/*.layout.json` に保存します。
@@ -73,6 +74,10 @@ graph LR
 - `POST /sync-ast`: UI操作（ノード追加/削除/更新）をGoコードに反映。
 - `GET/POST /layout`: ReactFlowのノード位置情報の永続化。
 - `POST /update`: コードエディタからの直接編集をファイルに保存。
+- `GET /svg`: 必要時のみSVGを生成して返却（Local Agent/Server共通）。
+
+### Local Agent の位置づけ
+Local Agent は `localhost` で動作する軽量HTTPサーバーで、ブラウザからローカルのGo/D2を実行するための橋渡し役です。`make studio-local` で Studio と一緒に起動でき、ログには `agent:` / `studio:` のプレフィックスが付きます。
 
 ### Clean Arch 適合度と例外（Go側）
 **結論**: 主要なDomain/UseCase/Infraの分離はできているが、一部は実装・運用の都合でFrameworkに寄せた“例外”が残っています。

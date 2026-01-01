@@ -60,6 +60,7 @@ The backend acts not just as a simple API server, but as an engine for analyzing
 ### Key Components
 
 - **Server (`cmd/studio/main.go`)**: An API/WS server using `gorilla/websocket` and the standard `http` package.
+- **Local Agent (`cmd/arch-agent`)**: An HTTP bridge to invoke local Go/D2 tools from the browser.
 - **StudioService (`internal/usecase`)**: Orchestration of layout management and AST synchronization.
 - **AST Syncer (`internal/infra/ast`)**: Directly rewrites the DSL files at the source level using `go/ast`, `go/parser`, and `go/format`. Node additions/deletions/updates in the UI are reflected in the Go code.
 - **Layout Repository (`internal/infra/repository`)**: Saves layouts (relative coordinates + parentMap) in `architectures/layout/*.layout.json`.
@@ -73,6 +74,10 @@ The backend acts not just as a simple API server, but as an engine for analyzing
 - `POST /sync-ast`: Reflects UI operations (add/delete/update nodes) into the Go code.
 - `GET/POST /layout`: Persists ReactFlow node position information.
 - `POST /update`: Saves direct edits from the code editor to the file.
+- `GET /svg`: Generates and returns SVG only when necessary (common to Local Agent/Server).
+
+### Role of the Local Agent
+The Local Agent is a lightweight HTTP server running on `localhost`, acting as a bridge to execute local Go/D2 from the browser. It can be started alongside Studio with `make studio-local`, and its logs are prefixed with `agent:`.
 
 ### Clean Arch Compliance and Exceptions (Go side)
 **Conclusion**: While the primary separation of Domain/UseCase/Infra is achieved, some "exceptions" remain where logic is pushed into the Framework for implementation and operational convenience.
