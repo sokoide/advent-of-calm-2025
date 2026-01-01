@@ -7,7 +7,9 @@
 静的な JSON を手書きする時代は終わりました。本プロジェクトでは、Go 言語の堅牢な **ロジック (DSL)** と、直感的な **視覚操作 (GUI)** をシームレスに同期させることで、アーキテクチャ設計を「退屈なドキュメント作成」から「エキサイティングな開発体験」へと進化させます。
 
 ### なぜ Go で書くのか？ — 構成（Config）から開発（Coding）へ
+
 静的な JSON や YAML の編集は「作業」になりがちですが、Go DSL を使うことで設計は「創造的な開発」になります。
+
 - **圧倒的な書き心地 (DX)**: 強力な IDE の補完、リファクタリング、定義へのジャンプなど、モダンな開発環境の恩恵をフルに受けられます。
 - **「実行するまでエラーがわからない」からの脱却**: Typo や型違いはエディタが即座に指摘し、不整合はビルド時に検出されます。
 - **ロジックによる表現**: ループや条件分岐、変数を駆使することで、巨大なシステムも簡潔かつ知的に記述できます。
@@ -18,12 +20,30 @@
 ## 主な機能とメリット
 
 ### 1. 双方向同期 (Bidirectional Sync)
+
 単なる一方向の生成ではありません。
+
 - **Go ➔ Diagram**: コードを保存した瞬間に図面が更新されます (Hot Reload)。
 - **Diagram ➔ Go**: GUI 上でのノード追加や名前変更が、Go ソースコード (AST) へ直接反映されます。
 - **JSON ➔ Go (Reverse Conversion)**: 生成された CALM JSON を直接編集し、**Diff 確認モーダル** を経て安全に Go DSL へ書き戻すことができます。
 
+#### Supported Views
+
+- Merged View: Go <-> React Flow双方向編集view
+![Go/ReactFlow merged view](./docs/ss/Merged.png)
+- D2 SVG View: DocumentやPresentation用に、このモデルのD2 Diagramが表示されます
+![D2 Diagram view](./docs/ss/D2Diagram.png)
+- Go DSL View: Goで書いたModelがReact Flow chart, CALM Json DSL, D2 DSL, D2 SVGにtranslateされます
+![Go view](./docs/ss/GoDSL.png)
+- Go DSL View: React Flow Diagramに書いたModelがGo、React Flow chart, CALM Json DSL, D2 DSL, D2 SVGにtranslateされます
+![React Flow Diagram view](./docs/ss/Diagram.png)
+- CALM View: CALM JSONもここにPasteでき、Goにtranslateできます。translate時に整合性問題はある程度自動で修復され、自動修復が難しい場合はError表示されます。
+![CALM view](./docs/ss/CALMDSL.png)
+- D2 DSL View: 使うことはないと思いますが、D2 DSLを見たい場合はここで確認できます。
+![D2 DSL view](./docs/ss/D2DSL.png)
+
 ### 2. 階層構造の完全サポート
+
 `Order Database Cluster` や `Message Broker` のような複雑な入れ子構造を、D2 および React Flow の両方で再帰的に正しくレンダリングします。グループを移動すれば、中身の子ノードも追随します。
 
 ---
@@ -56,28 +76,37 @@
 ## 開発者向けツール
 
 ### CALM Studio の起動
+
 以下のコマンドで、フロントエンドのビルドとサーバーの起動が自動で行われます。
+
 ```bash
 make studio
 ```
+
 起動後、ブラウザで `http://localhost:3000` を開き、以下のタブを操作してください。
+
 - **Merged**: Go エディタと Diagram の分割表示（標準モード）。
 - **Diagram**: React Flow によるインタラクティブな編集。
 - **CALM JSON**: JSON の確認と Go への「逆変換」。
 - **D2 Diagram**: D2 エンジンによる高精細な図面表示。
 
 ### Local Agent + Studio の起動
+
 ローカルの Go/D2 ツールチェーンを優先利用したい場合は、以下で同時起動します。
+
 ```bash
 make studio-local
 ```
+
 `studio-local` はログに `agent:` / `studio:` のプレフィックスを付けて表示します。
 
 #### Local Agent の意義
+
 - **サーバー負荷の集中を避ける**: 変換（Go DSL → JSON/D2）やSVG生成はクライアント側で実行し、サーバーは保存と配信に集中できます。
 - **ローカルのGo/D2を活用**: 各ユーザーのGoコンパイラとD2 CLIで変換・SVG生成を行うため、全体のスループットが上がります。
 
 ### その他のターゲット
+
 | コマンド | 説明 |
 | :--- | :--- |
 | **`make format`** | `golines` を使用して Go コードを整形します (120文字制限)。 |

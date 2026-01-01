@@ -23,6 +23,21 @@ It is not just a one-way generator.
 - **Diagram ➔ Go**: GUI edits (adding nodes, renaming) directly update the Go source code via AST analysis.
 - **JSON ➔ Go (Reverse Conversion)**: Edit the generated JSON and safely sync changes back to Go DSL through a **Diff Preview Modal**.
 
+#### Supported Views
+
+- **Merged View**: Bidirectional editing view between Go and React Flow.
+![Go/ReactFlow merged view](./docs/ss/Merged.png)
+- **D2 SVG View**: Displays D2 Diagrams of the model for documentation and presentations.
+![D2 Diagram view](./docs/ss/D2Diagram.png)
+- **Go DSL View**: Models written in Go are translated into React Flow charts, CALM JSON DSL, D2 DSL, and D2 SVGs.
+![Go view](./docs/ss/GoDSL.png)
+- **Diagram View**: Models drawn in the React Flow Diagram are translated into Go, React Flow charts, CALM JSON DSL, D2 DSL, and D2 SVGs.
+![React Flow Diagram view](./docs/ss/Diagram.png)
+- **CALM View**: CALM JSON can be pasted here and translated back into Go. During translation, consistency issues are partially auto-repaired; if auto-repair is difficult, errors are displayed.
+![CALM view](./docs/ss/CALMDSL.png)
+- **D2 DSL View**: You probably won't use it much, but you can check the D2 DSL here if needed.
+![D2 DSL view](./docs/ss/D2DSL.png)
+
 ### 2. Full Hierarchical Support
 Recursively renders complex nesting (Containers) like `Order Database Cluster` in both D2 and React Flow. Moving a group automatically moves all its children.
 
