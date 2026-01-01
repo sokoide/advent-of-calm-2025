@@ -14,6 +14,22 @@ export class StudioAPIClient implements StudioAPI {
     return resp.data as ContentSnapshot;
   }
 
+  async fetchSVG(): Promise<string> {
+    try {
+      const resp = await axios.get(`${this.baseUrl}/svg`);
+      if (resp.data && typeof resp.data.svg === 'string') {
+        return resp.data.svg as string;
+      }
+      if (typeof resp.data === 'string') {
+        return resp.data;
+      }
+    } catch (err) {
+      const resp = await axios.get(`${this.baseUrl}/content`);
+      return (resp.data?.svg as string) ?? '';
+    }
+    return '';
+  }
+
   async fetchLayout(archId: string): Promise<LayoutData> {
     const resp = await axios.get(`${this.baseUrl}/layout?id=${archId}`);
     return resp.data as LayoutData;

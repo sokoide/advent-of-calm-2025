@@ -18,6 +18,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/gorilla/websocket"
+	"github.com/sokoide/advent-of-calm-2025/internal/infra/generator"
 	"github.com/sokoide/advent-of-calm-2025/internal/infra/ast"
 	"github.com/sokoide/advent-of-calm-2025/internal/infra/repository"
 	"github.com/sokoide/advent-of-calm-2025/internal/usecase"
@@ -38,9 +39,14 @@ var (
 		JSON   string `json:"json"`
 	}
 	contentMu sync.RWMutex
+	modeHint  sync.Once
 )
 
-const dslRelativePath = "internal/usecase/ecommerce_architecture.go"
+const (
+	dslRelativePath   = "internal/usecase/ecommerce_architecture.go"
+	generateModeEnv   = "STUDIO_GENERATE_MODE"
+	generateModeGoRun = "gorun"
+)
 
 func main() {
 	flag.Parse()
@@ -97,6 +103,7 @@ func main() {
 	http.HandleFunc("/layout", withCORS(handleLayout))
 	http.HandleFunc("/sync-ast", withCORS(handleASTSync))
 	http.HandleFunc("/preview-json-sync", withCORS(handlePreviewJSONSync))
+	http.HandleFunc("/svg", withCORS(serveSVG))
 
 	port := "3000"
 	fmt.Printf("🎨 CALM Studio running at http://localhost:%s\n", port)
@@ -197,6 +204,43 @@ func regenerate() bool {
 	lastContent.GoCode = goCode
 	contentMu.Unlock()
 
+	if os.Getenv(generateModeEnv) == generateModeGoRun {
+		return regenerateWithGoRun()
+	}
+	modeHint.Do(func() {
+		log.Printf("ℹ️ In-process generator uses compiled Go DSL. Set %s=%s to reflect file edits.", generateModeEnv, generateModeGoRun)
+	})
+	return regenerateInProcess()
+}
+
+func regenerateInProcess() bool {
+	gen := generator.DefaultGenerator()
+
+	jsonOutput, _, err := gen.Generate(usecase.FormatJSON, false)
+	if err != nil {
+		log.Printf("❌ JSON generation error: %v", err)
+		return false
+	}
+
+	d2Output, _, err := gen.Generate(usecase.FormatRichD2, false)
+	if err != nil {
+		log.Printf("❌ Rich D2 output error: %v", err)
+		d2Output = ""
+	}
+
+	svg := generateSVGFromD2(d2Output)
+
+	contentMu.Lock()
+	lastContent.D2Code = d2Output
+	lastContent.SVG = svg
+	lastContent.JSON = jsonOutput
+	contentMu.Unlock()
+
+	log.Println("✅ Content updated (in-process)")
+	return true
+}
+
+func regenerateWithGoRun() bool {
 	// 2. Get JSON output
 	cmdJSON := exec.Command("go", "run", "./cmd/arch-gen")
 	cmdJSON.Dir = goDir
@@ -217,28 +261,10 @@ func regenerate() bool {
 	cmdD2.Stderr = &d2Err
 	if err := cmdD2.Run(); err != nil {
 		log.Printf("❌ Rich D2 output error: %v\n%s", err, d2Err.String())
-	} else {
-		log.Printf("📝 Rich D2 output generated (%d bytes):\n%s", d2Out.Len(), d2Out.String())
+		d2Out.Reset()
 	}
 
-	// 4. Generate SVG from D2
-	svg := ""
-	// We need a domain.Architecture object here to use renderer.RenderSVG.
-	// Since regenerate currently relies on running the arch-gen command,
-	// let's at least log the error if the manual d2 command fails.
-
-	d2Cmd := exec.Command("d2", "-", "-")
-	d2Cmd.Stdin = strings.NewReader(d2Out.String())
-	var svgOut, svgErr bytes.Buffer
-	d2Cmd.Stdout = &svgOut
-	d2Cmd.Stderr = &svgErr
-
-	if err := d2Cmd.Run(); err != nil {
-		log.Printf("❌ D2 SVG error: %v\n%s", err, svgErr.String())
-	} else {
-		svg = svgOut.String()
-		log.Printf("🎨 D2 SVG generated (%d bytes)", len(svg))
-	}
+	svg := generateSVGFromD2(d2Out.String())
 
 	contentMu.Lock()
 	lastContent.D2Code = d2Out.String()
@@ -246,8 +272,29 @@ func regenerate() bool {
 	lastContent.JSON = jsonOut.String()
 	contentMu.Unlock()
 
-	log.Println("✅ Content updated")
+	log.Println("✅ Content updated (go run)")
 	return true
+}
+
+func generateSVGFromD2(d2Source string) string {
+	if strings.TrimSpace(d2Source) == "" {
+		return ""
+	}
+
+	d2Cmd := exec.Command("d2", "-", "-")
+	d2Cmd.Stdin = strings.NewReader(d2Source)
+	var svgOut, svgErr bytes.Buffer
+	d2Cmd.Stdout = &svgOut
+	d2Cmd.Stderr = &svgErr
+
+	if err := d2Cmd.Run(); err != nil {
+		log.Printf("❌ D2 SVG error: %v\n%s", err, svgErr.String())
+		return ""
+	}
+
+	svg := svgOut.String()
+	log.Printf("🎨 D2 SVG generated (%d bytes)", len(svg))
+	return svg
 }
 
 func notifyClients(msg string) {
@@ -343,6 +390,25 @@ func serveContent(w http.ResponseWriter, r *http.Request) {
 	defer contentMu.RUnlock()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(lastContent)
+}
+
+func serveSVG(w http.ResponseWriter, r *http.Request) {
+	contentMu.RLock()
+	d2Code := lastContent.D2Code
+	svg := lastContent.SVG
+	contentMu.RUnlock()
+
+	if svg == "" && strings.TrimSpace(d2Code) != "" {
+		svg = generateSVGFromD2(d2Code)
+		if svg != "" {
+			contentMu.Lock()
+			lastContent.SVG = svg
+			contentMu.Unlock()
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"svg": svg})
 }
 
 func handleUpdate(w http.ResponseWriter, r *http.Request) {

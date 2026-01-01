@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sokoide/advent-of-calm-2025/internal/infra/render"
+	"github.com/sokoide/advent-of-calm-2025/internal/infra/generator"
 	"github.com/sokoide/advent-of-calm-2025/internal/usecase"
 )
 
@@ -20,18 +20,9 @@ func main() {
 	runValidation := flag.Bool("validate", false, "Run validation rules")
 	flag.Parse()
 
-	generator := usecase.Generator{
-		Builder: usecase.EcommerceBuilder{},
-		Renderers: map[usecase.OutputFormat]usecase.Renderer{
-			usecase.FormatJSON:   render.JSONRenderer{},
-			usecase.FormatD2:     render.D2Renderer{},
-			usecase.FormatRichD2: render.RichD2Renderer{},
-		},
-		Validator:     usecase.RuleValidator{Rules: usecase.DefaultValidationRules()},
-		DefaultFormat: usecase.FormatJSON,
-	}
+	gen := generator.DefaultGenerator()
 
-	output, validationErrors, err := generator.Generate(usecase.OutputFormat(*outputFormat), *runValidation)
+	output, validationErrors, err := gen.Generate(usecase.OutputFormat(*outputFormat), *runValidation)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

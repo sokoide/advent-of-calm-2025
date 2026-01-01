@@ -56,18 +56,37 @@ function App() {
   const [d2Zoom, setD2Zoom] = useState(1);
   const [d2Pan, setD2Pan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
+  const [apiBaseUrl, setApiBaseUrl] = useState(window.location.origin);
+  const [useLocalAgent, setUseLocalAgent] = useState(false);
 
   // Flag to avoid re-fetching while we are typing
   const isUpdating = useRef(false);
 
-  const studio = useMemo(
-    () =>
-      new StudioUseCase(
-        new StudioAPIClient(window.location.origin),
-        new StudioRealtime(window.location.host, window.location.protocol)
-      ),
-    []
-  );
+  const localAgentUrl = import.meta.env.VITE_LOCAL_AGENT_URL ?? 'http://localhost:8787';
+
+  useEffect(() => {
+    if (typeof fetch !== 'function') return;
+    const controller = new AbortController();
+    const checkLocalAgent = async () => {
+      try {
+        const resp = await fetch(`${localAgentUrl}/version`, { signal: controller.signal });
+        if (!resp.ok) return;
+        setApiBaseUrl(localAgentUrl);
+        setUseLocalAgent(true);
+      } catch {
+        // Local agent not available; stick to server API.
+      }
+    };
+    checkLocalAgent();
+    return () => controller.abort();
+  }, [localAgentUrl]);
+
+  const studio = useMemo(() => {
+    const realtime = useLocalAgent
+      ? { connect: () => () => {} }
+      : new StudioRealtime(window.location.host, window.location.protocol);
+    return new StudioUseCase(new StudioAPIClient(apiBaseUrl), realtime);
+  }, [apiBaseUrl, useLocalAgent]);
 
   const saveLayout = useCallback(async (currentNodes: Node[]) => {
     if (!archId) return;
@@ -104,7 +123,9 @@ function App() {
       
       setGoCode(remoteGo);
       setD2Code(remoteD2);
-      setSvgCode(svg);
+      if (svg) {
+        setSvgCode(svg);
+      }
 
       if (!json || json === "" || json === "null" || json === "{}") {
         console.log("⚠️ JSON is empty, showing code only");
@@ -140,6 +161,17 @@ function App() {
     }
   }, [setNodes, setEdges, saveLayout, studio]);
 
+  const fetchSVG = useCallback(async () => {
+    try {
+      const svg = await studio.fetchSVG();
+      if (svg) {
+        setSvgCode(svg);
+      }
+    } catch (err) {
+      console.error('Failed to fetch SVG:', err);
+    }
+  }, [studio]);
+
   useEffect(() => {
     fetchData();
 
@@ -151,6 +183,12 @@ function App() {
 
     return () => disconnect();
   }, [fetchData, studio]);
+
+  useEffect(() => {
+    if (activeTab === 'd2-diagram') {
+      fetchSVG();
+    }
+  }, [activeTab, fetchSVG]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((prev) => addEdge(params, prev)),
@@ -212,6 +250,9 @@ function App() {
     isUpdating.current = true;
     await studio.updateGo(val);
     setTimeout(() => { isUpdating.current = false; }, 1000);
+    if (useLocalAgent) {
+      fetchData(true);
+    }
   };
 
   const handleApplyJSON = async () => {

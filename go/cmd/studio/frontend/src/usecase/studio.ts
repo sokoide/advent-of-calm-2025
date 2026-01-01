@@ -18,6 +18,10 @@ export class StudioUseCase {
     return this.api.fetchContent();
   }
 
+  fetchSVG() {
+    return this.api.fetchSVG();
+  }
+
   fetchLayout(archId: string) {
     return this.api.fetchLayout(archId);
   }

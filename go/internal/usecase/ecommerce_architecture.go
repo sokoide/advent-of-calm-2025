@@ -150,7 +150,7 @@ func defineNodes(a *domain.Architecture) *nodesContainer {
 	nc.System = a.DefineNode(
 		"ecommerce-system",
 		domain.System,
-		"AAA-Commerce Platform",
+		"E-Commerce Platform",
 		"The overall e-commerce system containing microservices.",
 		domain.WithOwner("platform-team", "CC-2000"),
 	)

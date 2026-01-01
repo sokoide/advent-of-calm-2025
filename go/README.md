@@ -66,6 +66,13 @@ Then, open `http://localhost:3000` and explore these tabs:
 - **CALM JSON**: View JSON and perform "Reverse Sync" back to Go.
 - **D2 Diagram**: High-fidelity static view powered by D2.
 
+### Local Tool Agent (Optional)
+If you want the browser UI to use your local Go/D2 toolchain, run the agent:
+```bash
+go run ./cmd/arch-agent -dir . -port 8787
+```
+The frontend will prefer `http://localhost:8787` when available.
+
 ### Other Make Targets
 | Command | Description |
 | :--- | :--- |

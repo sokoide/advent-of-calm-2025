@@ -19,6 +19,7 @@ export interface SyncASTRequest {
 
 export interface StudioAPI {
   fetchContent(): Promise<ContentSnapshot>;
+  fetchSVG(): Promise<string>;
   fetchLayout(archId: string): Promise<LayoutData>;
   saveLayout(archId: string, layout: LayoutData): Promise<void>;
   syncAST(request: SyncASTRequest): Promise<void>;
