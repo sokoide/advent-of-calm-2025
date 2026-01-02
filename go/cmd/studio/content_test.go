@@ -4,6 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/sokoide/advent-of-calm-2025/cmd/studio/handlers"
+	"github.com/sokoide/advent-of-calm-2025/internal/usecase"
 )
 
 func TestRegenerate_ReadsGoDSL(t *testing.T) {
@@ -25,25 +28,15 @@ func TestRegenerate_ReadsGoDSL(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Set goDir to tmpDir
-	oldGoDir := goDir
-	goDir = tmpDir
-	defer func() { goDir = oldGoDir }()
+	// Create a test State with zero-value StudioService (not used in this test)
+	testState := handlers.NewState(tmpDir, usecase.StudioService{})
 
-	// We need to skip the actual 'go run' part for this unit test
-	// because it requires a full environment.
-	// For now, let's just test that regenerate() reads the file into lastContent.
-
-	// Since regenerate() has 'go run' calls that will fail, let's just test the file reading part
-	// by checking if we can mock or isolate it.
-
-	// (Actual implementation check)
-	mainPath := filepath.Join(goDir, dslRelativePath)
-	data, err := os.ReadFile(mainPath)
+	// Test file reading
+	data, err := testState.ReadGoDSL()
 	if err != nil {
 		t.Errorf("expected to read Go DSL, got error: %v", err)
 	}
-	if string(data) != expectedCode {
-		t.Errorf("expected %s, got %s", expectedCode, string(data))
+	if data != expectedCode {
+		t.Errorf("expected %s, got %s", expectedCode, data)
 	}
 }
