@@ -203,6 +203,7 @@ func AddNodeInAST(f *ast.File, nodeID, nodeType, name, desc string) error {
 // UpdateNodePropertyInAST updates a specific property (name, description, owner, etc.) of a node.
 func UpdateNodePropertyInAST(f *ast.File, nodeID, property, value string) error {
 	found := false
+	var updateErr error
 	ast.Inspect(f, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)
 		if !ok {
@@ -224,6 +225,26 @@ func UpdateNodePropertyInAST(f *ast.File, nodeID, property, value string) error 
 
 		// Handle specific properties
 		switch property {
+		case "node-type":
+			if len(call.Args) >= 2 {
+				nodeTypeName, ok := normalizeNodeType(value)
+				if !ok {
+					updateErr = fmt.Errorf("unsupported node-type %q", value)
+					found = true
+					return false
+				}
+				qualifier := ast.NewIdent("domain")
+				if sel, ok := call.Args[1].(*ast.SelectorExpr); ok {
+					if ident, ok := sel.X.(*ast.Ident); ok {
+						qualifier = ident
+					}
+				}
+				call.Args[1] = &ast.SelectorExpr{
+					X:   qualifier,
+					Sel: ast.NewIdent(nodeTypeName),
+				}
+				found = true
+			}
 		case "name":
 			if len(call.Args) >= 3 {
 				call.Args[2] = &ast.BasicLit{Kind: idLit.Kind, Value: fmt.Sprintf("%q", value)}
@@ -251,10 +272,32 @@ func UpdateNodePropertyInAST(f *ast.File, nodeID, property, value string) error 
 		return !found
 	})
 
+	if updateErr != nil {
+		return updateErr
+	}
 	if !found {
 		return fmt.Errorf("property %q for node %q not updated in AST", property, nodeID)
 	}
 	return nil
+}
+
+func normalizeNodeType(value string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "service":
+		return "Service", true
+	case "database":
+		return "Database", true
+	case "actor":
+		return "Actor", true
+	case "system":
+		return "System", true
+	case "queue":
+		return "Queue", true
+	case "webclient":
+		return "WebClient", true
+	default:
+		return "", false
+	}
 }
 
 func findDefineNodeTypeExpr(f *ast.File) ast.Expr {

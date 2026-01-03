@@ -182,8 +182,9 @@ func regenerate() bool {
 	goCode, err := state.ReadGoDSL()
 	if err != nil {
 		log.Printf("❌ Failed to read Go DSL: %v", err)
+	} else {
+		state.UpdateGoCode(goCode)
 	}
-	state.UpdateGoCode(goCode)
 
 	if os.Getenv(generateModeEnv) == generateModeGoRun {
 		return regenerateWithGoRun()

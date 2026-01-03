@@ -1,6 +1,8 @@
 import axios from 'axios';
 import type { StudioAPI, ContentSnapshot, SyncASTRequest } from '../domain/ports';
 import type { LayoutData } from '../domain/calm';
+import { StudioUseCase } from '../usecase/studio';
+import { StudioRealtime } from './studioRealtime';
 
 export class StudioAPIClient implements StudioAPI {
   private readonly baseUrl: string;
@@ -51,4 +53,36 @@ export class StudioAPIClient implements StudioAPI {
     const resp = await axios.post(`${this.baseUrl}/preview-json-sync`, { json });
     return resp.data as { newCode?: string; error?: string };
   }
+}
+
+export async function createStudioUseCase(params: {
+  localAgentUrl: string;
+  fallbackBaseUrl: string;
+  host: string;
+  protocol: string;
+}): Promise<{ studio: StudioUseCase; useLocalAgent: boolean }> {
+  const { localAgentUrl, fallbackBaseUrl, host, protocol } = params;
+  let baseUrl = fallbackBaseUrl;
+  let useLocalAgent = false;
+
+  if (typeof fetch === 'function') {
+    try {
+      const resp = await fetch(`${localAgentUrl}/version`);
+      if (resp.ok) {
+        baseUrl = localAgentUrl;
+        useLocalAgent = true;
+      }
+    } catch {
+      // Local agent not available; fall back to server API.
+    }
+  }
+
+  const realtime = useLocalAgent
+    ? { connect: () => () => {} }
+    : new StudioRealtime(host, protocol);
+
+  return {
+    studio: new StudioUseCase(new StudioAPIClient(baseUrl), realtime),
+    useLocalAgent,
+  };
 }
