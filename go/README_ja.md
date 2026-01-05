@@ -10,10 +10,10 @@
 
 静的な JSON や YAML の編集は「作業」になりがちですが、Go DSL を使うことで設計は「創造的な開発」になります。
 
-- **圧倒的な書き心地 (DX)**: 強力な IDE の補完、リファクタリング、定義へのジャンプなど、モダンな開発環境の恩恵をフルに受けられます。
-- **「実行するまでエラーがわからない」からの脱却**: Typo や型違いはエディタが即座に指摘し、不整合はビルド時に検出されます。
-- **ロジックによる表現**: ループや条件分岐、変数を駆使することで、巨大なシステムも簡潔かつ知的に記述できます。
-- **なによりも、楽しい**: 「巨大な JSON と格闘する」ストレスから解放され、「Go でスマートに設計図を組む」楽しさを享受できます。
+-   **圧倒的な書き心地 (DX)**: 強力な IDE の補完、リファクタリング、定義へのジャンプなど、モダンな開発環境の恩恵をフルに受けられます。
+-   **「実行するまでエラーがわからない」からの脱却**: Typo や型違いはエディタが即座に指摘し、不整合はビルド時に検出されます。
+-   **ロジックによる表現**: ループや条件分岐、変数を駆使することで、巨大なシステムも簡潔かつ知的に記述できます。
+-   **なによりも、楽しい**: 「巨大な JSON と格闘する」ストレスから解放され、「Go でスマートに設計図を組む」楽しさを享受できます。
 
 ---
 
@@ -23,24 +23,49 @@
 
 単なる一方向の生成ではありません。
 
-- **Go ➔ Diagram**: コードを保存した瞬間に図面が更新されます (Hot Reload)。
-- **Diagram ➔ Go**: GUI 上でのノード追加や名前変更が、Go ソースコード (AST) へ直接反映されます。
-- **JSON ➔ Go (Reverse Conversion)**: 生成された CALM JSON を直接編集し、**Diff 確認モーダル** を経て安全に Go DSL へ書き戻すことができます。
+-   **Go ➔ Diagram**: コードを保存した瞬間に図面が更新されます (Hot Reload)。
+-   **Diagram ➔ Go**: GUI 上でのノード追加や名前変更が、Go ソースコード (AST) へ直接反映されます。
+-   **JSON ➔ Go (Reverse Conversion)**: 生成された CALM JSON を直接編集し、**Diff 確認モーダル** を経て安全に Go DSL へ書き戻すことができます。
 
 #### Supported Views
 
-- Merged View: Go <-> React Flow双方向編集view
-![Go/ReactFlow merged view](./docs/ss/Merged.png)
-- D2 SVG View: DocumentやPresentation用に、このモデルのD2 Diagramが表示されます
-![D2 Diagram view](./docs/ss/D2Diagram.png)
-- Go DSL View: Goで書いたModelがReact Flow chart, CALM Json DSL, D2 DSL, D2 SVGにtranslateされます
-![Go view](./docs/ss/GoDSL.png)
-- Go DSL View: React Flow Diagramに書いたModelがGo、React Flow chart, CALM Json DSL, D2 DSL, D2 SVGにtranslateされます
-![React Flow Diagram view](./docs/ss/Diagram.png)
-- CALM View: CALM JSONもここにPasteでき、Goにtranslateできます。translate時に整合性問題はある程度自動で修復され、自動修復が難しい場合はError表示されます。
-![CALM view](./docs/ss/CALMDSL.png)
-- D2 DSL View: 使うことはないと思いますが、D2 DSLを見たい場合はここで確認できます。
-![D2 DSL view](./docs/ss/D2DSL.png)
+-   Merged View: Go <-> React Flow 双方向編集 view
+    ![Go/ReactFlow merged view](./docs/ss/Merged.png)
+-   D2 SVG View: Document や Presentation 用に、このモデルの D2 Diagram が表示されます
+    ![D2 Diagram view](./docs/ss/D2Diagram.png)
+-   Go DSL View: Go で書いた Model が React Flow chart, CALM Json DSL, D2 DSL, D2 SVG に translate されます
+    ![Go view](./docs/ss/GoDSL.png)
+-   Go DSL View: React Flow Diagram に書いた Model が Go、React Flow chart, CALM Json DSL, D2 DSL, D2 SVG に translate されます
+    ![React Flow Diagram view](./docs/ss/Diagram.png)
+-   CALM View: CALM JSON もここに Paste でき、Go に translate できます。translate 時に整合性問題はある程度自動で修復され、自動修復が難しい場合は Error 表示されます。
+    ![CALM view](./docs/ss/CALMDSL.png)
+-   D2 DSL View: 使うことはないと思いますが、D2 DSL を見たい場合はここで確認できます。
+    ![D2 DSL view](./docs/ss/D2DSL.png)
+
+### 制約ベース双方向編集モデル
+
+Go DSL のプログラミング的表現力（ループ、変数、関数）を維持しつつ、GUI からの編集を可能にするため、**Origin Tracking**と**AST Patching**を組み合わせた制約ベースの双方向編集モデルを採用しています。
+
+#### Go DSL 必須制約
+
+1. **すべてのノードに一意の ID**: `arch.DefineNode("api-gateway-1", ...)`
+2. **ループ変数は`const`または`var`で定義**: GUI 操作でループ数を増減可能にするため
+3. **1 ファイル 1 アーキテクチャ**: AST Patcher の複雑さを抑えるため
+
+#### GUI 操作制限マトリクス
+
+| Origin (生成元) | 追加            | 削除            | 名前変更 | 説明変更 |
+| --------------- | --------------- | --------------- | -------- | -------- |
+| **Explicit**    | ✅              | ✅              | ✅       | ✅       |
+| **Loop (最後)** | ✅ (ループ数+1) | ✅ (ループ数-1) | ⚠️       | ⚠️       |
+| **Loop (途中)** | ❌              | ❌              | ⚠️       | ⚠️       |
+| **Function**    | ❌              | ❌              | ❌       | ❌       |
+
+-   **Explicit**: Go DSL で明示的に定義されたノード → フル編集可能
+-   **Loop**: `for`ループで生成されたノード → 最後の要素のみ削除可能（ループ変数をデクリメント）
+-   **Function**: ヘルパー関数で生成されたノード → 表示のみ（Go コードで編集）
+
+⚠️ = テンプレートを変更すると全要素に適用される旨を警告表示
 
 ### 2. 階層構造の完全サポート
 
@@ -50,26 +75,26 @@
 
 ## なぜ JSON 直接編集より優れているのか？
 
-| 比較項目 | CALM 標準 JSON (手書き) | Go DSL + CALM Studio |
-| :--- | :--- | :--- |
-| **整合性** | ID の Typo や重複が実行までわからない。 | **コンパイル時とリアルタイムバリデーション**で完全保証。 |
-| **スケーリング** | 10台の増強に10箇所のコピペが必要。 | **定数を変えるだけ**。配線やフローも自動生成。 |
-| **視認性** | 数千行の JSON から全体像を把握するのは困難。 | **常に横に図面がある**。視覚とコードが一致する安心感。 |
-| **レイアウト** | 座標を手入力するのは苦行。 | **GUI でドラッグ＆ドロップ**。座標は自動保存。 |
-| **安全性** | 誤った置換でファイル全体が壊れるリスク。 | **AST 解析と Diff プレビュー**による安全な更新。 |
+| 比較項目         | CALM 標準 JSON (手書き)                      | Go DSL + CALM Studio                                     |
+| :--------------- | :------------------------------------------- | :------------------------------------------------------- |
+| **整合性**       | ID の Typo や重複が実行までわからない。      | **コンパイル時とリアルタイムバリデーション**で完全保証。 |
+| **スケーリング** | 10 台の増強に 10 箇所のコピペが必要。        | **定数を変えるだけ**。配線やフローも自動生成。           |
+| **視認性**       | 数千行の JSON から全体像を把握するのは困難。 | **常に横に図面がある**。視覚とコードが一致する安心感。   |
+| **レイアウト**   | 座標を手入力するのは苦行。                   | **GUI でドラッグ＆ドロップ**。座標は自動保存。           |
+| **安全性**       | 誤った置換でファイル全体が壊れるリスク。     | **AST 解析と Diff プレビュー**による安全な更新。         |
 
 ---
 
 ## DSL 命名規則 (Naming Conventions)
 
-| 接頭辞 / メソッド | 役割 | 説明 | 例 |
-| :--- | :--- | :--- | :--- |
-| **`New...`** | **独立した部品の生成** | 親が決まっていない単体の部品を作成します。 | `NewRequirement`, `NewSecurityConfig` |
-| **`Define...`** | **宣言的生成 (Modern)** | Functional Options を受け取り、ノード等を生成します。 | `arch.DefineNode()`, `arch.DefineFlow()` |
-| **`With...`** | **オプション設定** | `Define...` メソッドに渡すための設定関数です。 | `WithOwner()`, `WithMeta()` |
-| **`ConnectTo`** | **ノード中心の接続** | ノード自身から接続を開始し、Builder を返します。 | `node.ConnectTo(dest)` |
-| **`Via` / `Is` / `Encrypted`** | **属性の設定 (Fluent)** | プロパティを流れるように設定します。 | `rel.Via("src", "dst").Encrypted(true)` |
-| **`Merge`** | **メタデータの合成** | 複数のマップを一つにまとめます。衝突時はパニックします。 | `Merge(metaTier1, metaOps)` |
+| 接頭辞 / メソッド              | 役割                    | 説明                                                     | 例                                       |
+| :----------------------------- | :---------------------- | :------------------------------------------------------- | :--------------------------------------- |
+| **`New...`**                   | **独立した部品の生成**  | 親が決まっていない単体の部品を作成します。               | `NewRequirement`, `NewSecurityConfig`    |
+| **`Define...`**                | **宣言的生成 (Modern)** | Functional Options を受け取り、ノード等を生成します。    | `arch.DefineNode()`, `arch.DefineFlow()` |
+| **`With...`**                  | **オプション設定**      | `Define...` メソッドに渡すための設定関数です。           | `WithOwner()`, `WithMeta()`              |
+| **`ConnectTo`**                | **ノード中心の接続**    | ノード自身から接続を開始し、Builder を返します。         | `node.ConnectTo(dest)`                   |
+| **`Via` / `Is` / `Encrypted`** | **属性の設定 (Fluent)** | プロパティを流れるように設定します。                     | `rel.Via("src", "dst").Encrypted(true)`  |
+| **`Merge`**                    | **メタデータの合成**    | 複数のマップを一つにまとめます。衝突時はパニックします。 | `Merge(metaTier1, metaOps)`              |
 
 ---
 
@@ -85,10 +110,10 @@ make studio
 
 起動後、ブラウザで `http://localhost:3000` を開き、以下のタブを操作してください。
 
-- **Merged**: Go エディタと Diagram の分割表示（標準モード）。
-- **Diagram**: React Flow によるインタラクティブな編集。
-- **CALM JSON**: JSON の確認と Go への「逆変換」。
-- **D2 Diagram**: D2 エンジンによる高精細な図面表示。
+-   **Merged**: Go エディタと Diagram の分割表示（標準モード）。
+-   **Diagram**: React Flow によるインタラクティブな編集。
+-   **CALM JSON**: JSON の確認と Go への「逆変換」。
+-   **D2 Diagram**: D2 エンジンによる高精細な図面表示。
 
 ### Local Agent + Studio の起動
 
@@ -102,19 +127,19 @@ make studio-local
 
 #### Local Agent の意義
 
-- **サーバー負荷の集中を避ける**: 変換（Go DSL → JSON/D2）やSVG生成はクライアント側で実行し、サーバーは保存と配信に集中できます。
-- **ローカルのGo/D2を活用**: 各ユーザーのGoコンパイラとD2 CLIで変換・SVG生成を行うため、全体のスループットが上がります。
+-   **サーバー負荷の集中を避ける**: 変換（Go DSL → JSON/D2）や SVG 生成はクライアント側で実行し、サーバーは保存と配信に集中できます。
+-   **ローカルの Go/D2 を活用**: 各ユーザーの Go コンパイラと D2 CLI で変換・SVG 生成を行うため、全体のスループットが上がります。
 
 ### その他のターゲット
 
-| コマンド | 説明 |
-| :--- | :--- |
-| **`make format`** | `golines` を使用して Go コードを整形します (120文字制限)。 |
-| **`make check`** | 所有者設定やバックアップ設定などの設計ルールを検証します。 |
-| **`make validate`** | 生成された JSON が CALM スキーマに準拠しているか検証します。 |
-| **`make diff-arch`** | 2 つのアーキテクチャ間の意味的な差分をカラー表示します。 |
-| **`make d2`** | 静的な D2 ソースと SVG を一括生成します。 |
-| **`make test`** | ユニットテストを実行します。 |
+| コマンド             | 説明                                                         |
+| :------------------- | :----------------------------------------------------------- |
+| **`make format`**    | `golines` を使用して Go コードを整形します (120 文字制限)。  |
+| **`make check`**     | 所有者設定やバックアップ設定などの設計ルールを検証します。   |
+| **`make validate`**  | 生成された JSON が CALM スキーマに準拠しているか検証します。 |
+| **`make diff-arch`** | 2 つのアーキテクチャ間の意味的な差分をカラー表示します。     |
+| **`make d2`**        | 静的な D2 ソースと SVG を一括生成します。                    |
+| **`make test`**      | ユニットテストを実行します。                                 |
 
 ---
 

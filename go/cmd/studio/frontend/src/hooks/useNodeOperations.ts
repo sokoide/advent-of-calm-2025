@@ -1,7 +1,18 @@
 import { useCallback } from 'react';
 import type { Edge, Node } from 'reactflow';
-import type { CalmNode } from '../domain/calm';
+import type { CalmNode, NodeOrigin } from '../domain/calm';
 import type { StudioUseCase } from '../usecase/studio';
+import type { PatchOrigin, PatchOperation } from '../domain/ports';
+
+// Convert NodeOrigin (from CALM JSON) to PatchOrigin (for backend)
+function toPatchOrigin(origin: NodeOrigin): PatchOrigin {
+    return {
+        file: origin.file,
+        line: origin.line,
+        loopVar: origin.loopVar,
+        loopMax: origin.loopMax,
+    };
+}
 
 interface UseNodeOperationsProps {
     studio: StudioUseCase | null;
@@ -60,23 +71,24 @@ export function useNodeOperations({
 
             // Find the node to check for origin
             const node = nodes.find(n => n.id === id);
-            const origin = node?.data?.calm?._origin;
+            const origin = node?.data?.calm?._origin as NodeOrigin | undefined;
 
             if (origin) {
-                // Use Patch API
-                const ops: any[] = [];
+                // Use Patch API with proper origin conversion
+                const patchOrigin = toPatchOrigin(origin);
+                const ops: PatchOperation[] = [];
                 if (Object.prototype.hasOwnProperty.call(updatedCalm, 'name')) {
-                    ops.push({ type: 'update-node', origin, property: 'name', value: updatedCalm.name ?? '' });
+                    ops.push({ type: 'update-node', origin: patchOrigin, property: 'name', value: updatedCalm.name ?? '' });
                 }
                 if (Object.prototype.hasOwnProperty.call(updatedCalm, 'owner')) {
-                    ops.push({ type: 'update-node', origin, property: 'owner', value: updatedCalm.owner ?? '' });
+                    ops.push({ type: 'update-node', origin: patchOrigin, property: 'owner', value: updatedCalm.owner ?? '' });
                 }
                 if (Object.prototype.hasOwnProperty.call(updatedCalm, 'description')) {
-                    ops.push({ type: 'update-node', origin, property: 'description', value: updatedCalm.description ?? '' });
+                    ops.push({ type: 'update-node', origin: patchOrigin, property: 'description', value: updatedCalm.description ?? '' });
                 }
                 if (Object.prototype.hasOwnProperty.call(updatedCalm, 'node-type')) {
-                    ops.push({ type: 'update-node', origin, property: 'node-type', value: updatedCalm['node-type'] ?? '' });
-                } // Note: Patch API doesn't support node-type update fully yet, but backend handles basic cases
+                    ops.push({ type: 'update-node', origin: patchOrigin, property: 'node-type', value: updatedCalm['node-type'] ?? '' });
+                }
 
                 if (ops.length > 0) {
                     await studio.patchAST(ops);
@@ -126,7 +138,7 @@ export function useNodeOperations({
             if (!studio) return;
 
             const node = nodes.find(n => n.id === id);
-            const origin = node?.data?.calm?._origin;
+            const origin = node?.data?.calm?._origin as NodeOrigin | undefined;
 
             const remainingNodes = nodes.filter((node) => node.id !== id);
             const remainingEdges = edges.filter((edge) => edge.source !== id && edge.target !== id);
@@ -135,7 +147,8 @@ export function useNodeOperations({
             saveLayout(remainingNodes);
 
             if (origin) {
-                await studio.patchAST([{ type: 'delete-node', origin }]);
+                const patchOrigin = toPatchOrigin(origin);
+                await studio.patchAST([{ type: 'delete-node', origin: patchOrigin }]);
             } else {
                 await studio.syncAST({ action: 'delete', nodeId: id });
             }

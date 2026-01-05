@@ -21,7 +21,8 @@ const Sidebar = ({ selectedNode, onUpdate, onDelete, onClose }: SidebarProps) =>
 
   if (!selectedNode) return null;
 
-  const origin = formData._origin;
+  // Read origin directly from the node data, not from formData (which is for editing)
+  const origin = selectedNode.data.calm?._origin;
   const isDeletable = !origin || origin.type === 'explicit' ||
     (origin.type === 'loop' && origin.loopIndex === origin.loopMax);
   const isEditable = !origin || origin.type === 'explicit' || origin.type === 'loop';
@@ -44,7 +45,7 @@ const Sidebar = ({ selectedNode, onUpdate, onDelete, onClose }: SidebarProps) =>
       function: { color: 'bg-gray-500/20 text-gray-400 border-gray-500/30', icon: '⚪', label: 'Function Generated' },
     };
 
-    const badge = badges[origin.type];
+    const badge = badges[origin.type as keyof typeof badges];
     return (
       <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs font-medium ${badge.color}`}>
         <span>{badge.icon}</span>

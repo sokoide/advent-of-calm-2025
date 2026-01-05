@@ -73,8 +73,14 @@ func (s *State) HandlePatch(w http.ResponseWriter, r *http.Request) {
 
 	var ops []domain.PatchOperation
 	if err := json.NewDecoder(r.Body).Decode(&ops); err != nil {
+		log.Printf("❌ Patch decode error: %v", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+
+	log.Printf("📥 Patch request: %d operations", len(ops))
+	for i, op := range ops {
+		log.Printf("  [%d] type=%s loopVar=%s line=%d", i, op.Type, op.Origin.LoopVar, op.Origin.Line)
 	}
 
 	src, err := os.ReadFile(s.DSLPath())

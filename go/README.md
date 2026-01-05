@@ -7,100 +7,139 @@ This directory contains a custom DSL in Go designed to define and generate CALM 
 The era of manually writing static JSON is over. By seamlessly synchronizing robust **Go Logic (DSL)** with intuitive **Visual Interaction (GUI)**, this project transforms architecture design from "tedious documentation" into an "exciting development experience."
 
 ### Why Go? — From Configuration to Development
+
 While editing static JSON or YAML often feels like a chore, using a Go DSL transforms design into a creative development process.
-- **Superior Developer Experience (DX)**: Leverage modern IDEs with auto-completion, refactoring, and instant navigation.
-- **Immediate Feedback**: Typos and type mismatches are caught instantly by your editor, and inconsistencies are detected at compile time.
-- **Expressive Logic**: Use loops, conditionals, and variables to describe massive systems concisely and intelligently.
-- **Above all, it's Fun**: Replace the stress of wrestling with giant JSON files with the pure joy of "coding" your system design.
+
+-   **Superior Developer Experience (DX)**: Leverage modern IDEs with auto-completion, refactoring, and instant navigation.
+-   **Immediate Feedback**: Typos and type mismatches are caught instantly by your editor, and inconsistencies are detected at compile time.
+-   **Expressive Logic**: Use loops, conditionals, and variables to describe massive systems concisely and intelligently.
+-   **Above all, it's Fun**: Replace the stress of wrestling with giant JSON files with the pure joy of "coding" your system design.
 
 ---
 
 ## Key Features & Benefits
 
 ### 1. Bidirectional Sync
+
 It is not just a one-way generator.
-- **Go ➔ Diagram**: Diagrams update instantly on save (Hot Reload).
-- **Diagram ➔ Go**: GUI edits (adding nodes, renaming) directly update the Go source code via AST analysis.
-- **JSON ➔ Go (Reverse Conversion)**: Edit the generated JSON and safely sync changes back to Go DSL through a **Diff Preview Modal**.
+
+-   **Go ➔ Diagram**: Diagrams update instantly on save (Hot Reload).
+-   **Diagram ➔ Go**: GUI edits (adding nodes, renaming) directly update the Go source code via AST analysis.
+-   **JSON ➔ Go (Reverse Conversion)**: Edit the generated JSON and safely sync changes back to Go DSL through a **Diff Preview Modal**.
 
 #### Supported Views
 
-- **Merged View**: Bidirectional editing view between Go and React Flow.
-![Go/ReactFlow merged view](./docs/ss/Merged.png)
-- **D2 SVG View**: Displays D2 Diagrams of the model for documentation and presentations.
-![D2 Diagram view](./docs/ss/D2Diagram.png)
-- **Go DSL View**: Models written in Go are translated into React Flow charts, CALM JSON DSL, D2 DSL, and D2 SVGs.
-![Go view](./docs/ss/GoDSL.png)
-- **Diagram View**: Models drawn in the React Flow Diagram are translated into Go, React Flow charts, CALM JSON DSL, D2 DSL, and D2 SVGs.
-![React Flow Diagram view](./docs/ss/Diagram.png)
-- **CALM View**: CALM JSON can be pasted here and translated back into Go. During translation, consistency issues are partially auto-repaired; if auto-repair is difficult, errors are displayed.
-![CALM view](./docs/ss/CALMDSL.png)
-- **D2 DSL View**: You probably won't use it much, but you can check the D2 DSL here if needed.
-![D2 DSL view](./docs/ss/D2DSL.png)
+-   **Merged View**: Bidirectional editing view between Go and React Flow.
+    ![Go/ReactFlow merged view](./docs/ss/Merged.png)
+-   **D2 SVG View**: Displays D2 Diagrams of the model for documentation and presentations.
+    ![D2 Diagram view](./docs/ss/D2Diagram.png)
+-   **Go DSL View**: Models written in Go are translated into React Flow charts, CALM JSON DSL, D2 DSL, and D2 SVGs.
+    ![Go view](./docs/ss/GoDSL.png)
+-   **Diagram View**: Models drawn in the React Flow Diagram are translated into Go, React Flow charts, CALM JSON DSL, D2 DSL, and D2 SVGs.
+    ![React Flow Diagram view](./docs/ss/Diagram.png)
+-   **CALM View**: CALM JSON can be pasted here and translated back into Go. During translation, consistency issues are partially auto-repaired; if auto-repair is difficult, errors are displayed.
+    ![CALM view](./docs/ss/CALMDSL.png)
+-   **D2 DSL View**: You probably won't use it much, but you can check the D2 DSL here if needed.
+    ![D2 DSL view](./docs/ss/D2DSL.png)
+
+### Constraint-Based Bidirectional Editing Model
+
+To maintain Go DSL's programming power (loops, variables, functions) while enabling GUI editing, we use a constraint-based bidirectional editing model combining **Origin Tracking** and **AST Patching**.
+
+#### Go DSL Constraints
+
+1. **All nodes must have a unique ID**: `arch.DefineNode("api-gateway-1", ...)`
+2. **Loop variables must be `const` or `var`**: Enables GUI to increment/decrement loop counts
+3. **One architecture per file**: Keeps AST Patcher complexity manageable
+
+#### GUI Operation Restriction Matrix
+
+| Origin            | Add         | Delete      | Rename | Description |
+| ----------------- | ----------- | ----------- | ------ | ----------- |
+| **Explicit**      | ✅          | ✅          | ✅     | ✅          |
+| **Loop (last)**   | ✅ (loop+1) | ✅ (loop-1) | ⚠️     | ⚠️          |
+| **Loop (middle)** | ❌          | ❌          | ⚠️     | ⚠️          |
+| **Function**      | ❌          | ❌          | ❌     | ❌          |
+
+-   **Explicit**: Nodes defined explicitly in Go DSL → Fully editable
+-   **Loop**: Nodes generated by `for` loops → Only last element deletable (decrements loop variable)
+-   **Function**: Nodes generated by helper functions → Read-only (edit in Go code)
+
+⚠️ = Warning: editing affects all elements generated by the template
 
 ### 2. Full Hierarchical Support
+
 Recursively renders complex nesting (Containers) like `Order Database Cluster` in both D2 and React Flow. Moving a group automatically moves all its children.
 
 ---
 
 ## Why is this better than editing JSON directly?
 
-| Aspect | Standard CALM JSON (Manual) | Go DSL + CALM Studio |
-| :--- | :--- | :--- |
-| **Consistency** | ID typos go unnoticed until runtime. | **Compile-time and real-time validation**. |
-| **Scaling** | 10-instance scaling needs 10 copy-pastes. | **Change one constant**. Wiring updates automatically. |
-| **Visibility** | Big picture lost in 1000s of lines. | **Always see the diagram** next to your code. |
-| **Layout** | Manual coordinate entry is painful. | **Drag & Drop in GUI**. Coordinates saved automatically. |
-| **Safety** | Search/replace risks breaking files. | **AST Analysis & Diff Preview** prevent mistakes. |
+| Aspect          | Standard CALM JSON (Manual)               | Go DSL + CALM Studio                                     |
+| :-------------- | :---------------------------------------- | :------------------------------------------------------- |
+| **Consistency** | ID typos go unnoticed until runtime.      | **Compile-time and real-time validation**.               |
+| **Scaling**     | 10-instance scaling needs 10 copy-pastes. | **Change one constant**. Wiring updates automatically.   |
+| **Visibility**  | Big picture lost in 1000s of lines.       | **Always see the diagram** next to your code.            |
+| **Layout**      | Manual coordinate entry is painful.       | **Drag & Drop in GUI**. Coordinates saved automatically. |
+| **Safety**      | Search/replace risks breaking files.      | **AST Analysis & Diff Preview** prevent mistakes.        |
 
 ---
 
 ## DSL Naming Conventions
 
-| Prefix / Method | Role | Description | Example |
-| :--- | :--- | :--- | :--- |
-| **`New...`** | **Independent part generation** | Creates a standalone component with no parent. | `NewRequirement` |
-| **`Define...`** | **Declarative creation** | Generates objects using Functional Options. | `arch.DefineNode()` |
-| **`With...`** | **Option setting** | Configuration functions for `Define...` methods. | `WithOwner()`, `WithMeta()` |
-| **`ConnectTo`** | **Node-centric connection** | Initiates a connection from the node itself. | `node.ConnectTo(dest)` |
-| **`Via` / `Is` / `Encrypted`** | **Attribute setting** | Fluently configures object properties. | `rel.Encrypted(true)` |
-| **`Merge`** | **Metadata synthesis** | Combines multiple maps into one. Panics on collision. | `Merge(metaTier1, metaOps)` |
+| Prefix / Method                | Role                            | Description                                           | Example                     |
+| :----------------------------- | :------------------------------ | :---------------------------------------------------- | :-------------------------- |
+| **`New...`**                   | **Independent part generation** | Creates a standalone component with no parent.        | `NewRequirement`            |
+| **`Define...`**                | **Declarative creation**        | Generates objects using Functional Options.           | `arch.DefineNode()`         |
+| **`With...`**                  | **Option setting**              | Configuration functions for `Define...` methods.      | `WithOwner()`, `WithMeta()` |
+| **`ConnectTo`**                | **Node-centric connection**     | Initiates a connection from the node itself.          | `node.ConnectTo(dest)`      |
+| **`Via` / `Is` / `Encrypted`** | **Attribute setting**           | Fluently configures object properties.                | `rel.Encrypted(true)`       |
+| **`Merge`**                    | **Metadata synthesis**          | Combines multiple maps into one. Panics on collision. | `Merge(metaTier1, metaOps)` |
 
 ---
 
 ## Developer Tools
 
 ### Launching CALM Studio
+
 Build the frontend and launch the server with one command:
+
 ```bash
 make studio
 ```
+
 Then, open `http://localhost:3000` and explore these tabs:
-- **Merged**: Split view with Go Editor and Diagram (Standard mode).
-- **Diagram**: Interactive editing via React Flow.
-- **CALM JSON**: View JSON and perform "Reverse Sync" back to Go.
-- **D2 Diagram**: High-fidelity static view powered by D2.
+
+-   **Merged**: Split view with Go Editor and Diagram (Standard mode).
+-   **Diagram**: Interactive editing via React Flow.
+-   **CALM JSON**: View JSON and perform "Reverse Sync" back to Go.
+-   **D2 Diagram**: High-fidelity static view powered by D2.
 
 ### Launching Local Agent + Studio
+
 If you want to prioritize using your local Go/D2 toolchain, launch both simultaneously:
+
 ```bash
 make studio-local
 ```
+
 `studio-local` displays logs with `agent:` / `studio:` prefixes.
 
 #### Significance of the Local Agent
-- **Avoid Server Overload**: Conversion (Go DSL → JSON/D2) and SVG generation are executed on the client side, allowing the server to focus on storage and delivery.
-- **Leverage Local Go/D2**: Since conversion and SVG generation use each user's Go compiler and D2 CLI, overall throughput is increased.
+
+-   **Avoid Server Overload**: Conversion (Go DSL → JSON/D2) and SVG generation are executed on the client side, allowing the server to focus on storage and delivery.
+-   **Leverage Local Go/D2**: Since conversion and SVG generation use each user's Go compiler and D2 CLI, overall throughput is increased.
 
 ### Other Make Targets
-| Command | Description |
-| :--- | :--- |
-| **`make format`** | Formats Go code with 120-character limit using `golines`. |
-| **`make check`** | Verifies design rules (Ownership, Backup, etc.). |
-| **`make validate`** | Validates generated JSON against CALM schema. |
+
+| Command              | Description                                                |
+| :------------------- | :--------------------------------------------------------- |
+| **`make format`**    | Formats Go code with 120-character limit using `golines`.  |
+| **`make check`**     | Verifies design rules (Ownership, Backup, etc.).           |
+| **`make validate`**  | Validates generated JSON against CALM schema.              |
 | **`make diff-arch`** | Shows semantic differences between architectures in color. |
-| **`make d2`** | Generates static D2 source and SVG files. |
-| **`make test`** | Runs unit tests. |
+| **`make d2`**        | Generates static D2 source and SVG files.                  |
+| **`make test`**      | Runs unit tests.                                           |
 
 ---
 

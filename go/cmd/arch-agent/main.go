@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/sokoide/advent-of-calm-2025/internal/domain"
 	"github.com/sokoide/advent-of-calm-2025/internal/infra/ast"
 	"github.com/sokoide/advent-of-calm-2025/internal/infra/generator"
 	"github.com/sokoide/advent-of-calm-2025/internal/infra/repository"
@@ -59,6 +60,7 @@ func main() {
 	http.HandleFunc("/svg", withCORS(srv.handleSVG))
 	http.HandleFunc("/update", withCORS(srv.handleUpdate))
 	http.HandleFunc("/sync-ast", withCORS(srv.handleASTSync))
+	http.HandleFunc("/patch", withCORS(srv.handlePatch))
 	http.HandleFunc("/preview-json-sync", withCORS(srv.handlePreviewJSONSync))
 	http.HandleFunc("/layout", withCORS(srv.handleLayout))
 
@@ -358,4 +360,47 @@ func (s *server) handleLayout(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (s *server) handlePatch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var ops []domain.PatchOperation
+	if err := json.NewDecoder(r.Body).Decode(&ops); err != nil {
+		log.Printf("❌ Patch decode error: %v", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("POST /patch: %d operations from %s", len(ops), r.RemoteAddr)
+	for i, op := range ops {
+		if op.Origin != nil {
+			log.Printf("  [%d] type=%s loopVar=%s line=%d", i, op.Type, op.Origin.LoopVar, op.Origin.Line)
+		}
+	}
+
+	mainPath := filepath.Join(s.goDir, dslRelativePath)
+	src, err := os.ReadFile(mainPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	newCode, err := s.studioSvc.ApplyPatch(string(src), ops)
+	if err != nil {
+		log.Printf("❌ Patch apply error: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := os.WriteFile(mainPath, []byte(newCode), 0644); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("✅ Patch applied successfully")
+	w.WriteHeader(http.StatusOK)
 }
