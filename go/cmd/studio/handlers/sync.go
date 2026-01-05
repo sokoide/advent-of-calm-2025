@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/sokoide/advent-of-calm-2025/internal/domain"
 	"github.com/sokoide/advent-of-calm-2025/internal/usecase"
 )
 
@@ -60,6 +61,40 @@ func (s *State) HandleASTSync(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("✅ AST Synced: %s node %s", req.Action, req.NodeID)
+	w.WriteHeader(http.StatusOK)
+}
+
+// HandlePatch handles AST patching operations.
+func (s *State) HandlePatch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var ops []domain.PatchOperation
+	if err := json.NewDecoder(r.Body).Decode(&ops); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	src, err := os.ReadFile(s.DSLPath())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	newCode, err := s.StudioSvc.ApplyPatch(string(src), ops)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := os.WriteFile(s.DSLPath(), []byte(newCode), 0644); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("✅ Patch Applied: %d operations", len(ops))
 	w.WriteHeader(http.StatusOK)
 }
 

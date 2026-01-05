@@ -57,52 +57,89 @@ export function useNodeOperations({
     const onUpdateNode = useCallback(
         async (id: string, updatedCalm: Partial<CalmNode>) => {
             if (!studio) return;
-            if (Object.prototype.hasOwnProperty.call(updatedCalm, 'name')) {
-                await studio.syncAST({
-                    action: 'update',
-                    nodeId: id,
-                    property: 'name',
-                    value: updatedCalm.name ?? '',
-                });
-            }
-            if (Object.prototype.hasOwnProperty.call(updatedCalm, 'owner')) {
-                await studio.syncAST({
-                    action: 'update',
-                    nodeId: id,
-                    property: 'owner',
-                    value: updatedCalm.owner ?? '',
-                });
-            }
-            if (Object.prototype.hasOwnProperty.call(updatedCalm, 'description')) {
-                await studio.syncAST({
-                    action: 'update',
-                    nodeId: id,
-                    property: 'description',
-                    value: updatedCalm.description ?? '',
-                });
-            }
-            if (Object.prototype.hasOwnProperty.call(updatedCalm, 'node-type')) {
-                await studio.syncAST({
-                    action: 'update',
-                    nodeId: id,
-                    property: 'node-type',
-                    value: updatedCalm['node-type'] ?? '',
-                });
+
+            // Find the node to check for origin
+            const node = nodes.find(n => n.id === id);
+            const origin = node?.data?.calm?._origin;
+
+            if (origin) {
+                // Use Patch API
+                const ops: any[] = [];
+                if (Object.prototype.hasOwnProperty.call(updatedCalm, 'name')) {
+                    ops.push({ type: 'update-node', origin, property: 'name', value: updatedCalm.name ?? '' });
+                }
+                if (Object.prototype.hasOwnProperty.call(updatedCalm, 'owner')) {
+                    ops.push({ type: 'update-node', origin, property: 'owner', value: updatedCalm.owner ?? '' });
+                }
+                if (Object.prototype.hasOwnProperty.call(updatedCalm, 'description')) {
+                    ops.push({ type: 'update-node', origin, property: 'description', value: updatedCalm.description ?? '' });
+                }
+                if (Object.prototype.hasOwnProperty.call(updatedCalm, 'node-type')) {
+                    ops.push({ type: 'update-node', origin, property: 'node-type', value: updatedCalm['node-type'] ?? '' });
+                } // Note: Patch API doesn't support node-type update fully yet, but backend handles basic cases
+
+                if (ops.length > 0) {
+                    await studio.patchAST(ops);
+                }
+            } else {
+                // Fallback to legacy Sync API
+                if (Object.prototype.hasOwnProperty.call(updatedCalm, 'name')) {
+                    await studio.syncAST({
+                        action: 'update',
+                        nodeId: id,
+                        property: 'name',
+                        value: updatedCalm.name ?? '',
+                    });
+                }
+                if (Object.prototype.hasOwnProperty.call(updatedCalm, 'owner')) {
+                    await studio.syncAST({
+                        action: 'update',
+                        nodeId: id,
+                        property: 'owner',
+                        value: updatedCalm.owner ?? '',
+                    });
+                }
+                if (Object.prototype.hasOwnProperty.call(updatedCalm, 'description')) {
+                    await studio.syncAST({
+                        action: 'update',
+                        nodeId: id,
+                        property: 'description',
+                        value: updatedCalm.description ?? '',
+                    });
+                }
+                if (Object.prototype.hasOwnProperty.call(updatedCalm, 'node-type')) {
+                    await studio.syncAST({
+                        action: 'update',
+                        nodeId: id,
+                        property: 'node-type',
+                        value: updatedCalm['node-type'] ?? '',
+                    });
+                }
             }
             fetchData(true);
         },
-        [fetchData, studio]
+        [fetchData, studio, nodes]
     );
 
     const onDeleteNode = useCallback(
         async (id: string) => {
             if (!studio) return;
+
+            const node = nodes.find(n => n.id === id);
+            const origin = node?.data?.calm?._origin;
+
             const remainingNodes = nodes.filter((node) => node.id !== id);
             const remainingEdges = edges.filter((edge) => edge.source !== id && edge.target !== id);
             setNodes(remainingNodes);
             setEdges(remainingEdges);
             saveLayout(remainingNodes);
-            await studio.syncAST({ action: 'delete', nodeId: id });
+
+            if (origin) {
+                await studio.patchAST([{ type: 'delete-node', origin }]);
+            } else {
+                await studio.syncAST({ action: 'delete', nodeId: id });
+            }
+
             setSelectedNode(null);
             setTimeout(() => {
                 fetchData(true);

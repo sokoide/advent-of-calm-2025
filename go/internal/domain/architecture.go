@@ -63,6 +63,7 @@ type Node struct {
 	Metadata    map[string]any      `json:"metadata,omitempty"`
 	Controls    map[string]*Control `json:"controls,omitempty"`
 	Interfaces  []Interface         `json:"interfaces,omitempty"`
+	Origin      *NodeOrigin         `json:"_origin,omitempty"`
 }
 
 // ConnectionBuilder helps construct relationships fluently

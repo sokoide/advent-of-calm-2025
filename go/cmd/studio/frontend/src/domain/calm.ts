@@ -8,6 +8,18 @@ export interface CalmArchitecture {
   metadata?: Record<string, any>;
 }
 
+export type NodeOriginType = 'explicit' | 'loop' | 'function';
+
+export interface NodeOrigin {
+  type: NodeOriginType;
+  file: string;
+  line: number;
+  funcName?: string;
+  loopIndex?: number;
+  loopMax?: number;
+  loopVar?: string;
+}
+
 export interface CalmNode {
   "unique-id": string;
   "node-type": string;
@@ -17,6 +29,7 @@ export interface CalmNode {
   costCenter?: string;
   metadata?: Record<string, any>;
   interfaces?: CalmInterface[];
+  _origin?: NodeOrigin;
 }
 
 export interface CalmInterface {

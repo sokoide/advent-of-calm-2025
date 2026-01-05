@@ -16,6 +16,7 @@ type ASTSyncer interface {
 	AddNode(src, nodeID, nodeType, name, desc string) (string, error)
 	UpdateNodeProperty(src, nodeID, property, value string) (string, error)
 	DeleteNode(src, nodeID string) (string, error)
+	ApplyPatch(src string, ops []PatchOperation) (string, error)
 }
 
 // LayoutRepository manages the persistence of layout metadata.

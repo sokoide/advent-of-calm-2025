@@ -65,3 +65,8 @@ func (s StudioService) ApplyNodeAction(src string, action NodeAction) (string, e
 		return "", fmt.Errorf("invalid action: %s", action.Action)
 	}
 }
+
+// ApplyPatch applies a list of patch operations to the Go DSL source.
+func (s StudioService) ApplyPatch(src string, ops []domain.PatchOperation) (string, error) {
+	return s.ASTSyncer.ApplyPatch(src, ops)
+}

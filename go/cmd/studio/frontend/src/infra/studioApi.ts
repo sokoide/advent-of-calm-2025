@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { StudioAPI, ContentSnapshot, SyncASTRequest } from '../domain/ports';
+import type { StudioAPI, ContentSnapshot, SyncASTRequest, PatchOperation } from '../domain/ports';
 import type { LayoutData } from '../domain/calm';
 import { StudioUseCase } from '../usecase/studio';
 import { StudioRealtime } from './studioRealtime';
@@ -45,6 +45,10 @@ export class StudioAPIClient implements StudioAPI {
     await axios.post(`${this.baseUrl}/sync-ast`, request);
   }
 
+  async patchAST(ops: PatchOperation[]): Promise<void> {
+    await axios.post(`${this.baseUrl}/patch`, ops);
+  }
+
   async updateGo(content: string): Promise<void> {
     await axios.post(`${this.baseUrl}/update`, { type: 'go', content });
   }
@@ -78,7 +82,7 @@ export async function createStudioUseCase(params: {
   }
 
   const realtime = useLocalAgent
-    ? { connect: () => () => {} }
+    ? { connect: () => () => { } }
     : new StudioRealtime(host, protocol);
 
   return {

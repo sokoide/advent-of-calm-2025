@@ -369,6 +369,7 @@ func WithControl(id, desc string, reqs ...Requirement) NodeOption {
 
 // DefineNode creates a new node with functional options.
 // It replaces the verbose Node() method calls with a cleaner config style.
+// Origin tracking is automatically performed to enable bidirectional GUI editing.
 func (a *Architecture) DefineNode(id string, ntype NodeType, name, desc string, opts ...NodeOption) *Node {
 	n := &Node{
 		Arch:        a,
@@ -378,6 +379,7 @@ func (a *Architecture) DefineNode(id string, ntype NodeType, name, desc string, 
 		Description: desc,
 		Metadata:    make(map[string]any),
 		Controls:    make(map[string]*Control),
+		Origin:      DetectOrigin(3), // Skip: runtime.Callers, DetectOrigin, DefineNode
 	}
 	for _, opt := range opts {
 		opt(n)

@@ -25,13 +25,6 @@ func (EcommerceBuilder) Build() *domain.Architecture {
 	nodes := defineNodes(arch)
 	links := wireComponents(arch, nodes)
 	defineFlows(arch, nodes, links)
-	arch.DefineNode("api-gateway-1", domain.Service, "API Gateway Instance 1", "Primary API Gateway instance.")
-	arch.DefineNode(
-		"api-gateway-2",
-		domain.Service,
-		"API Gateway Instance 2",
-		"Secondary API Gateway instance for high availability.",
-	)
 
 	return arch
 }
@@ -186,6 +179,7 @@ func defineNodes(a *domain.Architecture) *nodesContainer {
 	}
 
 	for i := 1; i <= numGateways; i++ {
+		domain.SetLoopContext("numGateways", i, numGateways)
 		id := fmt.Sprintf("api-gateway-%d", i)
 		desc := "Primary API Gateway instance."
 		if i == 2 {
@@ -209,6 +203,7 @@ func defineNodes(a *domain.Architecture) *nodesContainer {
 		gw.Interface(fmt.Sprintf("gateway-%d-health", i), "HTTP").SetName("Health Check").SetPath("/health")
 		nc.Gateways = append(nc.Gateways, gw)
 	}
+	domain.ClearLoopContext()
 
 	orderFailures := []map[string]any{
 		{
