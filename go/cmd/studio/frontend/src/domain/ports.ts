@@ -25,11 +25,13 @@ export interface PatchOrigin {
 }
 
 export interface PatchOperation {
-  type: 'update-node' | 'delete-node' | 'update-count';
+  type: 'update-node' | 'delete-node' | 'update-count' | 'delete-relationship' | 'add-relationship';
   nodeId?: string;
   origin?: PatchOrigin;
   property?: string;
   value?: any;
+  sourceNode?: string;
+  targetNode?: string;
 }
 
 export interface StudioAPI {

@@ -4,18 +4,22 @@ package domain
 type PatchType string
 
 const (
-	PatchUpdateNode  PatchType = "update-node"
-	PatchDeleteNode  PatchType = "delete-node"
-	PatchUpdateCount PatchType = "update-count" // For loop variables
+	PatchUpdateNode         PatchType = "update-node"
+	PatchDeleteNode         PatchType = "delete-node"
+	PatchUpdateCount        PatchType = "update-count" // For loop variables
+	PatchDeleteRelationship PatchType = "delete-relationship"
+	PatchAddRelationship    PatchType = "add-relationship"
 )
 
 // PatchOperation represents a single change to the source code.
 type PatchOperation struct {
-	Type     PatchType    `json:"type"`
-	NodeID   string       `json:"nodeId,omitempty"`
-	Origin   *PatchOrigin `json:"origin,omitempty"`
-	Property string       `json:"property,omitempty"` // For update-node
-	Value    interface{}  `json:"value,omitempty"`    // For update-node or update-count
+	Type       PatchType    `json:"type"`
+	NodeID     string       `json:"nodeId,omitempty"`
+	Origin     *PatchOrigin `json:"origin,omitempty"`
+	Property   string       `json:"property,omitempty"`   // For update-node
+	Value      interface{}  `json:"value,omitempty"`      // For update-node or update-count
+	SourceNode string       `json:"sourceNode,omitempty"` // For add-relationship
+	TargetNode string       `json:"targetNode,omitempty"` // For add-relationship
 }
 
 // PatchOrigin carries the necessary info to locate the code.

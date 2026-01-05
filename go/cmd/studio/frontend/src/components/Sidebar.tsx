@@ -183,6 +183,69 @@ const Sidebar = ({ selectedNode, onUpdate, onDelete, onClose }: SidebarProps) =>
             disabled={!isEditable}
           />
         </div>
+
+        {/* Metadata Section */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Metadata</label>
+            {isEditable && (
+              <button
+                type="button"
+                onClick={() => {
+                  const key = prompt('Enter metadata key:');
+                  if (key && key.trim()) {
+                    const value = prompt('Enter metadata value:');
+                    setFormData((prev) => ({
+                      ...prev,
+                      metadata: { ...(prev.metadata || {}), [key.trim()]: value || '' },
+                    }));
+                  }
+                }}
+                className="text-xs text-blue-400 hover:text-blue-300"
+              >
+                + Add
+              </button>
+            )}
+          </div>
+          {formData.metadata && Object.keys(formData.metadata).length > 0 ? (
+            <div className="space-y-1.5">
+              {Object.entries(formData.metadata).map(([key, value]) => (
+                <div key={key} className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400 font-mono bg-slate-800 px-2 py-1 rounded">{key}</span>
+                  <input
+                    type="text"
+                    className="flex-1 p-1.5 bg-slate-800 border border-slate-700 rounded text-xs text-slate-200 outline-none focus:border-blue-500"
+                    value={String(value)}
+                    onChange={(e) => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        metadata: { ...(prev.metadata || {}), [key]: e.target.value },
+                      }));
+                    }}
+                    disabled={!isEditable}
+                  />
+                  {isEditable && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData((prev) => {
+                          const newMeta = { ...(prev.metadata || {}) };
+                          delete newMeta[key];
+                          return { ...prev, metadata: newMeta };
+                        });
+                      }}
+                      className="text-red-400 hover:text-red-300 text-xs"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs text-slate-600 italic">No metadata</div>
+          )}
+        </div>
       </div>
 
       <div className="p-4 border-t border-slate-800 bg-slate-900/50 space-y-3">

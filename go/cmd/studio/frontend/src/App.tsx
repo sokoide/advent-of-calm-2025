@@ -99,8 +99,35 @@ function App() {
   }, [nodes, edges, setNodes, setEdges, saveLayout]);
 
   const onConnect = useCallback(
-    (params: Connection) => setEdges((prev) => addEdge(params, prev)),
-    [setEdges]
+    async (params: Connection) => {
+      // Add edge to UI immediately
+      const newEdgeId = `new-connection-${Date.now()}`;
+      const newEdge = {
+        ...params,
+        id: newEdgeId,
+        animated: true,
+      };
+      setEdges((prev) => addEdge(newEdge, prev));
+
+      // Call backend to add relationship to Go DSL
+      if (studio && params.source && params.target) {
+        try {
+          await studio.patchAST([
+            {
+              type: 'add-relationship',
+              nodeId: newEdgeId,
+              sourceNode: params.source,
+              targetNode: params.target,
+            },
+          ]);
+          // Refresh after backend updates
+          setTimeout(() => fetchData(true), 500);
+        } catch (err) {
+          console.error('Failed to add relationship:', err);
+        }
+      }
+    },
+    [setEdges, studio, fetchData]
   );
 
   const handleGoCodeChange = async (val: string | undefined) => {
@@ -139,6 +166,24 @@ function App() {
     }
   };
 
+  const onDeleteEdge = useCallback(
+    async (edgeId: string) => {
+      setEdges((eds) => eds.filter((e) => e.id !== edgeId));
+
+      // Call backend to delete relationship from Go DSL
+      if (studio) {
+        try {
+          await studio.patchAST([{ type: 'delete-relationship', nodeId: edgeId }]);
+          // Refresh data after successful deletion
+          setTimeout(() => fetchData(true), 500);
+        } catch (err) {
+          console.error('Failed to delete relationship:', err);
+        }
+      }
+    },
+    [setEdges, studio, fetchData]
+  );
+
   const renderDiagram = () => (
     <DiagramView
       nodes={nodes}
@@ -153,6 +198,7 @@ function App() {
       onPaneClick={() => setSelectedNode(null)}
       onAddNode={onAddNode}
       onResetLayout={onResetLayout}
+      onDeleteEdge={onDeleteEdge}
     />
   );
 

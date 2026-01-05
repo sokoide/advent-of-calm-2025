@@ -1,17 +1,63 @@
 @import "tailwindcss";
 
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+    font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
 }
 
 body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
+    margin: 0;
+    min-width: 320px;
+    min-height: 100vh;
 }
 
 .system-group {
-  border: 2px dashed #64748b !important;
-  background-color: rgba(30, 41, 59, 0.5) !important;
-  border-radius: 12px !important;
+    border: 2px dashed #64748b !important;
+    background-color: rgba(30, 41, 59, 0.5) !important;
+    border-radius: 12px !important;
+}
+
+/* NodeResizer handle styles */
+.react-flow__resize-control {
+    z-index: 100 !important;
+    pointer-events: all !important;
+}
+
+.react-flow__resize-control.handle {
+    width: 12px !important;
+    height: 12px !important;
+    background: #3b82f6 !important;
+    border: 2px solid white !important;
+    border-radius: 2px !important;
+    pointer-events: all !important;
+}
+
+.react-flow__resize-control.line {
+    border-color: #3b82f6 !important;
+    pointer-events: all !important;
+}
+
+/* Cursor for resize handles */
+.react-flow__resize-control.handle.top {
+    cursor: n-resize !important;
+}
+.react-flow__resize-control.handle.bottom {
+    cursor: s-resize !important;
+}
+.react-flow__resize-control.handle.left {
+    cursor: w-resize !important;
+}
+.react-flow__resize-control.handle.right {
+    cursor: e-resize !important;
+}
+.react-flow__resize-control.handle.top.left {
+    cursor: nw-resize !important;
+}
+.react-flow__resize-control.handle.top.right {
+    cursor: ne-resize !important;
+}
+.react-flow__resize-control.handle.bottom.left {
+    cursor: sw-resize !important;
+}
+.react-flow__resize-control.handle.bottom.right {
+    cursor: se-resize !important;
 }

@@ -1,6 +1,7 @@
-import ReactFlow, { 
-  Background, 
-  Controls, 
+import { useMemo } from 'react';
+import ReactFlow, {
+  Background,
+  Controls,
   Panel,
   type Node,
   type Edge,
@@ -12,6 +13,7 @@ import 'reactflow/dist/style.css';
 import { Plus, Layout } from 'lucide-react';
 
 import CalmNodeComponent from './CalmNode';
+import DeletableEdge from './DeletableEdge';
 
 const nodeTypes = {
   service: CalmNodeComponent,
@@ -19,6 +21,10 @@ const nodeTypes = {
   actor: CalmNodeComponent,
   system: CalmNodeComponent,
   queue: CalmNodeComponent,
+};
+
+const edgeTypes = {
+  default: DeletableEdge,
 };
 
 interface DiagramViewProps {
@@ -32,6 +38,7 @@ interface DiagramViewProps {
   onPaneClick: () => void;
   onAddNode: () => void;
   onResetLayout: () => void;
+  onDeleteEdge?: (id: string) => void;
 }
 
 const DiagramView = ({
@@ -45,13 +52,26 @@ const DiagramView = ({
   onPaneClick,
   onAddNode,
   onResetLayout,
+  onDeleteEdge,
 }: DiagramViewProps) => {
+  // Inject onDelete callback into each edge's data
+  const edgesWithData = useMemo(() => {
+    return edges.map((edge) => ({
+      ...edge,
+      data: {
+        ...edge.data,
+        onDelete: onDeleteEdge,
+      },
+    }));
+  }, [edges, onDeleteEdge]);
+
   return (
     <div className="w-full h-full bg-slate-950">
       <ReactFlow
         nodes={nodes}
-        edges={edges}
+        edges={edgesWithData}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
@@ -63,13 +83,13 @@ const DiagramView = ({
         <Background />
         <Controls />
         <Panel position="top-left" className="flex gap-2">
-          <button 
+          <button
             onClick={onAddNode}
             className="flex items-center gap-2 bg-white px-3 py-2 rounded shadow border border-gray-200 hover:bg-gray-50 font-medium text-sm text-gray-700"
           >
             <Plus size={16} /> Add Node
           </button>
-          <button 
+          <button
             onClick={onResetLayout}
             className="flex items-center gap-2 bg-white px-3 py-2 rounded shadow border border-gray-200 hover:bg-gray-50 font-medium text-sm text-gray-700"
           >

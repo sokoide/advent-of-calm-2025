@@ -47,7 +47,7 @@ export const transformToReactFlow = (
     return {
       id,
       type: n['node-type'],
-      data: { 
+      data: {
         label: n.name,
         calm: n,
         isContainer
@@ -63,6 +63,7 @@ export const transformToReactFlow = (
         backgroundColor: 'rgba(15, 23, 42, 0.1)',
         border: '2px dashed rgba(100, 116, 139, 0.5)',
         borderRadius: '12px',
+        boxSizing: 'border-box' as const,
       } : undefined,
     };
   });
