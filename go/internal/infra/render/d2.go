@@ -21,11 +21,11 @@ func (D2Renderer) Render(a *domain.Architecture) (string, error) {
 	sb.WriteString("# Generated from Go DSL\n\n")
 
 	// Direction
-	sb.WriteString("direction: right\n\n")
+	sb.WriteString("direction: down\n\n")
 
 	// Style definitions
 	sb.WriteString("classes: {\n")
-	sb.WriteString("  actor: {\n    shape: person\n    style.fill: \"#e1f5fe\"\n  }\n")
+	sb.WriteString("  actor: {\n    shape: person\n    style.fill: \"#e1f5fe\"\n    height: 80\n    width: 60\n  }\n")
 	sb.WriteString("  service: {\n    shape: rectangle\n    style.fill: \"#e8f5e9\"\n    style.border-radius: 8\n  }\n")
 	sb.WriteString("  database: {\n    shape: cylinder\n    style.fill: \"#fff3e0\"\n  }\n")
 	sb.WriteString("  queue: {\n    shape: queue\n    style.fill: \"#f3e5f5\"\n  }\n")
