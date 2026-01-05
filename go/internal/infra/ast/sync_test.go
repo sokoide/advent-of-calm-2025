@@ -122,11 +122,61 @@ func build() {
 	}
 
 	actual := buf.String()
-	// Check if both nodes exist in the output
-	if !strings.Contains(actual, `"Updated Name"`) {
+	if !strings.Contains(actual, "\"Updated Name\"") {
 		t.Errorf("expected updated name not found")
 	}
-	if !strings.Contains(actual, `"node2"`) {
+	if !strings.Contains(actual, "\"node2\"") {
 		t.Errorf("expected new node not found")
+	}
+}
+
+func TestDeleteNodeLoadBalancer(t *testing.T) {
+	src := `package main
+func defineNodes(a *domain.Architecture) *nodesContainer {
+	nc := &nodesContainer{}
+	nc.LB = a.DefineNode(
+		"load-balancer",
+		domain.Service,
+		"Load Balancer",
+		"desc",
+	)
+	nc.LB.Interface("lb-https", "HTTPS")
+	return nc
+}
+func wireComponents(a *domain.Architecture, n *nodesContainer) {
+	a.Interacts("id", "desc", n.LB.GetID(), "other")
+}`
+
+	expected := `package main
+
+func defineNodes(a *domain.Architecture) *nodesContainer {
+	nc := &nodesContainer{}
+
+	return nc
+}
+func wireComponents(a *domain.Architecture, n *nodesContainer) {
+
+}
+`
+
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "test.go", src, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = DeleteNodeInAST(f, "load-balancer")
+	if err != nil {
+		t.Fatalf("failed to delete node: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := format.Node(&buf, fset, f); err != nil {
+		t.Fatal(err)
+	}
+
+	actual := buf.String()
+	if actual != expected {
+		t.Errorf("expected:\n%s\ngot:\n%s", expected, actual)
 	}
 }

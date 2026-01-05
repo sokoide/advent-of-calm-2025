@@ -358,41 +358,281 @@ func isWithOwnerCall(fn ast.Expr) bool {
 
 // DeleteNodeInAST removes a DefineNode call with the given id from the AST.
 func DeleteNodeInAST(f *ast.File, nodeID string) error {
+	var varName string
+	// 1. Find the variable name assigned to this nodeID (if any)
+	ast.Inspect(f, func(n ast.Node) bool {
+		assign, ok := n.(*ast.AssignStmt)
+		if !ok {
+			return true
+		}
+		for _, rhs := range assign.Rhs {
+			if isDefineNodeCall(rhs, nodeID) {
+				if len(assign.Lhs) == 1 {
+					varName = exprToSimpleString(assign.Lhs[0])
+				}
+				return false
+			}
+		}
+		return true
+	})
+
 	found := false
 	for _, decl := range f.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
-		if !ok {
+		if !ok || fn.Body == nil {
 			continue
 		}
 
-		newList := make([]ast.Stmt, 0, len(fn.Body.List))
-		for _, stmt := range fn.Body.List {
-			shouldDelete := false
-
-			// Check if stmt is arch.DefineNode("nodeID", ...)
-			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
-				if call, ok := exprStmt.X.(*ast.CallExpr); ok {
-					if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "DefineNode" {
-						if len(call.Args) > 0 {
-							if idLit, ok := call.Args[0].(*ast.BasicLit); ok &&
-								idLit.Value == fmt.Sprintf("%q", nodeID) {
-								shouldDelete = true
-								found = true
-							}
-						}
-					}
-				}
-			}
-
-			if !shouldDelete {
-				newList = append(newList, stmt)
-			}
-		}
+		newList, removed := deleteNodeFromStmtList(fn.Body.List, nodeID, varName)
 		fn.Body.List = newList
+		if removed {
+			found = true
+		}
 	}
 
 	if !found {
 		return fmt.Errorf("node with id %q not found in AST", nodeID)
 	}
 	return nil
+}
+
+func deleteNodeFromStmtList(stmts []ast.Stmt, nodeID string, varName string) ([]ast.Stmt, bool) {
+	found := false
+	newList := make([]ast.Stmt, 0, len(stmts))
+
+	for _, stmt := range stmts {
+		// 1. Remove the DefineNode call
+		if stmtDefinesNode(stmt, nodeID) {
+			found = true
+			continue
+		}
+
+		// 2. Remove any statement that references the variable assigned to the deleted node
+		if varName != "" && stmtReferencesVariable(stmt, varName) {
+			found = true
+			continue
+		}
+
+		// 3. Remove any statement that references the nodeID as a string literal
+		if stmtReferencesStringLiteral(stmt, nodeID) {
+			found = true
+			continue
+		}
+
+		if deleteNodeFromStmt(stmt, nodeID, varName) {
+			found = true
+		}
+		newList = append(newList, stmt)
+	}
+
+	return newList, found
+}
+
+func stmtReferencesStringLiteral(stmt ast.Stmt, val string) bool {
+	referenced := false
+	ast.Inspect(stmt, func(n ast.Node) bool {
+		if referenced {
+			return false
+		}
+		lit, ok := n.(*ast.BasicLit)
+		if ok && lit.Kind == token.STRING {
+			if strings.Trim(lit.Value, "\"`") == val {
+				referenced = true
+			}
+		}
+		return !referenced
+	})
+	return referenced
+}
+
+func stmtReferencesVariable(stmt ast.Stmt, varName string) bool {
+	if varName == "" {
+		return false
+	}
+	// Extract base field name if it's a selector (e.g. nc.PaymentSvc -> PaymentSvc)
+	parts := strings.Split(varName, ".")
+	baseName := parts[len(parts)-1]
+
+	referenced := false
+	ast.Inspect(stmt, func(n ast.Node) bool {
+		if referenced {
+			return false
+		}
+		switch v := n.(type) {
+		case *ast.Ident:
+			if v.Name == baseName {
+				referenced = true
+			}
+		case *ast.SelectorExpr:
+			if v.Sel.Name == baseName {
+				referenced = true
+			}
+		}
+		return !referenced
+	})
+	return referenced
+}
+
+func exprToSimpleString(expr ast.Expr) string {
+	switch v := expr.(type) {
+	case *ast.Ident:
+		return v.Name
+	case *ast.SelectorExpr:
+		x := exprToSimpleString(v.X)
+		if x == "" {
+			return v.Sel.Name
+		}
+		return x + "." + v.Sel.Name
+	default:
+		return ""
+	}
+}
+
+func deleteNodeFromStmt(stmt ast.Stmt, nodeID string, varName string) bool {
+	switch s := stmt.(type) {
+	case *ast.BlockStmt:
+		newList, found := deleteNodeFromStmtList(s.List, nodeID, varName)
+		s.List = newList
+		return found
+	case *ast.ForStmt:
+		if s.Body == nil {
+			return false
+		}
+		newList, found := deleteNodeFromStmtList(s.Body.List, nodeID, varName)
+		s.Body.List = newList
+		return found
+	case *ast.RangeStmt:
+		if s.Body == nil {
+			return false
+		}
+		newList, found := deleteNodeFromStmtList(s.Body.List, nodeID, varName)
+		s.Body.List = newList
+		return found
+	case *ast.IfStmt:
+		found := false
+		if s.Body != nil {
+			newList, removed := deleteNodeFromStmtList(s.Body.List, nodeID, varName)
+			s.Body.List = newList
+			found = found || removed
+		}
+		if s.Else != nil {
+			found = found || deleteNodeFromElse(s.Else, nodeID, varName)
+		}
+		return found
+	case *ast.SwitchStmt:
+		found := false
+		for _, clauseStmt := range s.Body.List {
+			clause, ok := clauseStmt.(*ast.CaseClause)
+			if !ok {
+				continue
+			}
+			newList, removed := deleteNodeFromStmtList(clause.Body, nodeID, varName)
+			clause.Body = newList
+			found = found || removed
+		}
+		return found
+	case *ast.TypeSwitchStmt:
+		found := false
+		for _, clauseStmt := range s.Body.List {
+			clause, ok := clauseStmt.(*ast.CaseClause)
+			if !ok {
+				continue
+			}
+			newList, removed := deleteNodeFromStmtList(clause.Body, nodeID, varName)
+			clause.Body = newList
+			found = found || removed
+		}
+		return found
+	case *ast.SelectStmt:
+		found := false
+		for _, clauseStmt := range s.Body.List {
+			clause, ok := clauseStmt.(*ast.CommClause)
+			if !ok {
+				continue
+			}
+			newList, removed := deleteNodeFromStmtList(clause.Body, nodeID, varName)
+			clause.Body = newList
+			found = found || removed
+		}
+		return found
+	case *ast.LabeledStmt:
+		return deleteNodeFromStmt(s.Stmt, nodeID, varName)
+	default:
+		return false
+	}
+}
+
+func deleteNodeFromElse(elseStmt ast.Stmt, nodeID string, varName string) bool {
+	switch stmt := elseStmt.(type) {
+	case *ast.BlockStmt:
+		newList, found := deleteNodeFromStmtList(stmt.List, nodeID, varName)
+		stmt.List = newList
+		return found
+	case *ast.IfStmt:
+		return deleteNodeFromStmt(stmt, nodeID, varName)
+	default:
+		return false
+	}
+}
+
+func stmtDefinesNode(stmt ast.Stmt, nodeID string) bool {
+	switch s := stmt.(type) {
+	case *ast.ExprStmt:
+		return isDefineNodeCall(s.X, nodeID)
+	case *ast.AssignStmt:
+		for _, expr := range s.Rhs {
+			if isDefineNodeCall(expr, nodeID) {
+				return true
+			}
+		}
+		return false
+	case *ast.DeclStmt:
+		decl, ok := s.Decl.(*ast.GenDecl)
+		if !ok {
+			return false
+		}
+		for _, spec := range decl.Specs {
+			valueSpec, ok := spec.(*ast.ValueSpec)
+			if !ok {
+				continue
+			}
+			for _, val := range valueSpec.Values {
+				if isDefineNodeCall(val, nodeID) {
+					return true
+				}
+			}
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+func isDefineNodeCall(expr ast.Expr, nodeID string) bool {
+	call, ok := expr.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != "DefineNode" {
+		return false
+	}
+	if len(call.Args) == 0 {
+		return false
+	}
+	// Try to match nodeID against first argument
+	// It could be a literal string or an identifier
+	switch arg := call.Args[0].(type) {
+	case *ast.BasicLit:
+		if arg.Kind == token.STRING {
+			val := strings.Trim(arg.Value, "\"`")
+			return val == nodeID
+		}
+	case *ast.Ident:
+		// TODO: If the ID is a variable (e.g. 'id' in a loop), we can't easily know its value
+		// without more analysis. For now, we only match if the variable name itself
+		// matches the nodeID (unlikely for loops, but possible for constants).
+		return arg.Name == nodeID
+	}
+	return false
 }

@@ -113,14 +113,14 @@ watch-d2:
 studio: cmd/studio/frontend/dist
 	@echo "🎨 Starting CALM Studio..."
 	@command -v d2 >/dev/null 2>&1 || (echo "❌ d2 が見つかりません。brew install d2 を実行してください。" && exit 1)
-	@cd cmd/studio && go run . ../..
+	@cd cmd/studio && STUDIO_GENERATE_MODE=gorun go run . ../..
 
 studio-local: cmd/studio/frontend/dist
 	@echo "🧭 Starting local agent + CALM Studio..."
 	@command -v d2 >/dev/null 2>&1 || (echo "❌ d2 が見つかりません。brew install d2 を実行してください。" && exit 1)
 	@bash -c 'set -euo pipefail; \
-		(go run ./cmd/arch-agent -dir . -port 8787 2>&1 | sed -l "s/^/agent: /") & AGENT_PID=$$!; \
-		(go run ./cmd/studio 2>&1 | sed -l "s/^/studio: /") & STUDIO_PID=$$!; \
+		(go run ./cmd/arch-agent -dir . -port 8787 2>&1 | sed -u "s/^/agent: /") & AGENT_PID=$$!; \
+		(STUDIO_GENERATE_MODE=gorun go run ./cmd/studio 2>&1 | sed -u "s/^/studio: /") & STUDIO_PID=$$!; \
 		trap "kill $$AGENT_PID $$STUDIO_PID 2>/dev/null || true" INT TERM EXIT; \
 		wait $$AGENT_PID $$STUDIO_PID'
 

@@ -190,7 +190,11 @@ func regenerate() bool {
 		return regenerateWithGoRun()
 	}
 	modeHint.Do(func() {
-		log.Printf("ℹ️ In-process generator uses compiled Go DSL. Set %s=%s to reflect file edits.", generateModeEnv, generateModeGoRun)
+		log.Printf(
+			"ℹ️ In-process generator uses compiled Go DSL. Set %s=%s to reflect file edits.",
+			generateModeEnv,
+			generateModeGoRun,
+		)
 	})
 	return regenerateInProcess()
 }

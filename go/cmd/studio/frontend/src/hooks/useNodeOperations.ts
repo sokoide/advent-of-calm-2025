@@ -1,12 +1,14 @@
 import { useCallback } from 'react';
-import type { Node } from 'reactflow';
+import type { Edge, Node } from 'reactflow';
 import type { CalmNode } from '../domain/calm';
 import type { StudioUseCase } from '../usecase/studio';
 
 interface UseNodeOperationsProps {
     studio: StudioUseCase | null;
     nodes: Node[];
+    edges: Edge[];
     setNodes: (nodes: Node[] | ((nds: Node[]) => Node[])) => void;
+    setEdges: (edges: Edge[] | ((eds: Edge[]) => Edge[])) => void;
     saveLayout: (nodes: Node[]) => Promise<void>;
     fetchData: (isWSUpdate?: boolean) => Promise<void>;
     setSelectedNode: (node: Node | null) => void;
@@ -15,7 +17,9 @@ interface UseNodeOperationsProps {
 export function useNodeOperations({
     studio,
     nodes,
+    edges,
     setNodes,
+    setEdges,
     saveLayout,
     fetchData,
     setSelectedNode,
@@ -93,11 +97,18 @@ export function useNodeOperations({
     const onDeleteNode = useCallback(
         async (id: string) => {
             if (!studio) return;
+            const remainingNodes = nodes.filter((node) => node.id !== id);
+            const remainingEdges = edges.filter((edge) => edge.source !== id && edge.target !== id);
+            setNodes(remainingNodes);
+            setEdges(remainingEdges);
+            saveLayout(remainingNodes);
             await studio.syncAST({ action: 'delete', nodeId: id });
             setSelectedNode(null);
-            fetchData(true);
+            setTimeout(() => {
+                fetchData(true);
+            }, 500);
         },
-        [fetchData, studio, setSelectedNode]
+        [edges, fetchData, nodes, saveLayout, setEdges, setNodes, setSelectedNode, studio]
     );
 
     const onNodeDragStop = useCallback(

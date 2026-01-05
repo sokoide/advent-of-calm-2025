@@ -68,7 +68,9 @@ function App() {
   const { onAddNode, onUpdateNode, onDeleteNode, onNodeDragStop } = useNodeOperations({
     studio,
     nodes,
+    edges,
     setNodes,
+    setEdges,
     saveLayout,
     fetchData,
     setSelectedNode,

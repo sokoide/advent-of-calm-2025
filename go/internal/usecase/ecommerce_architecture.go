@@ -149,7 +149,10 @@ func defineNodes(a *domain.Architecture) *nodesContainer {
 
 	nc.System = a.DefineNode(
 		"ecommerce-system",
-		domain.System, "E-Commerce Platform", "The overall e-commerce system containing microservices.", domain.WithOwner("platform-team", "CC-2000"),
+		domain.System,
+		"E-Commerce Platform",
+		"The overall e-commerce system containing microservices.",
+		domain.WithOwner("platform-team", "CC-2000"),
 	)
 
 	nc.LB = a.DefineNode(
@@ -351,7 +354,10 @@ func defineNodes(a *domain.Architecture) *nodesContainer {
 
 	nc.Broker = a.DefineNode(
 		"message-broker",
-		domain.System, "Message Broker (RabbitMQ)", "Central messaging system for failure isolation and async processing.", domain.WithOwner("platform-team", "CC-2000"),
+		domain.System,
+		"Message Broker (RabbitMQ)",
+		"Central messaging system for failure isolation and async processing.",
+		domain.WithOwner("platform-team", "CC-2000"),
 		domain.WithMeta(domain.Merge(metaOpsPlatform, metaManagedSvc, map[string]any{
 			"tech-owner":      "Platform Team",
 			"tier":            "tier-1",

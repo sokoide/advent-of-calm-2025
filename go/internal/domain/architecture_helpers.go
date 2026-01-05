@@ -40,34 +40,96 @@ func (a *Architecture) Node(id string, ntype NodeType, name, desc string) *Node 
 
 // --- Node Methods ---
 func (n *Node) Standard(cc, owner string) *Node {
+	if n == nil {
+		return nil
+	}
 	n.CostCenter = cc
 	n.Owner = owner
 	return n
 }
 
 func (n *Node) Interface(id, protocol string) *Interface {
+	if n == nil {
+		return nil
+	}
 	i := Interface{UniqueID: id, Protocol: protocol}
 	n.Interfaces = append(n.Interfaces, i)
 	return &n.Interfaces[len(n.Interfaces)-1]
 }
 
 func (n *Node) AddMeta(k string, v any) *Node {
+	if n == nil {
+		return nil
+	}
 	n.Metadata[k] = v
 	return n
 }
 
 func (n *Node) AddControl(id string, desc string, reqs ...Requirement) *Node {
+	if n == nil {
+		return nil
+	}
 	n.Controls[id] = &Control{Description: desc, Requirements: reqs}
 	return n
 }
 
+func (n *Node) GetID() string {
+	if n == nil {
+		return ""
+	}
+	return n.UniqueID
+}
+
+func (n *Node) GetName() string {
+	if n == nil {
+		return ""
+	}
+	return n.Name
+}
+
 // --- Interface Methods ---
-func (i *Interface) SetPort(p int) *Interface    { i.Port = p; return i }
-func (i *Interface) SetHost(h string) *Interface { i.Host = h; return i }
-func (i *Interface) SetPath(p string) *Interface { i.Path = p; return i }
-func (i *Interface) SetName(n string) *Interface { i.Name = n; return i }
-func (i *Interface) SetDesc(d string) *Interface { i.Description = d; return i }
-func (i *Interface) SetDB(d string) *Interface   { i.Database = d; return i }
+func (i *Interface) SetPort(p int) *Interface {
+	if i == nil {
+		return nil
+	}
+	i.Port = p
+	return i
+}
+func (i *Interface) SetHost(h string) *Interface {
+	if i == nil {
+		return nil
+	}
+	i.Host = h
+	return i
+}
+func (i *Interface) SetPath(p string) *Interface {
+	if i == nil {
+		return nil
+	}
+	i.Path = p
+	return i
+}
+func (i *Interface) SetName(n string) *Interface {
+	if i == nil {
+		return nil
+	}
+	i.Name = n
+	return i
+}
+func (i *Interface) SetDesc(d string) *Interface {
+	if i == nil {
+		return nil
+	}
+	i.Description = d
+	return i
+}
+func (i *Interface) SetDB(d string) *Interface {
+	if i == nil {
+		return nil
+	}
+	i.Database = d
+	return i
+}
 
 // --- Metadata ---
 func NewMetadata() Metadata {
@@ -105,25 +167,50 @@ func (a *Architecture) Connect(id, desc, src, dst string) *Relationship {
 }
 
 func (r *Relationship) SrcIntf(intfs ...string) *Relationship {
+	if r == nil || r.RelationshipType.Connects == nil {
+		return nil
+	}
 	r.RelationshipType.Connects.Source.Interfaces = intfs
 	return r
 }
 
 func (r *Relationship) DstIntf(intfs ...string) *Relationship {
+	if r == nil || r.RelationshipType.Connects == nil {
+		return nil
+	}
 	r.RelationshipType.Connects.Destination.Interfaces = intfs
 	return r
 }
 
 func (r *Relationship) Data(class string, enc bool) *Relationship {
+	if r == nil {
+		return nil
+	}
 	r.DataClassification = class
 	r.Encrypted = BoolPtr(enc)
 	return r
 }
 
-func (r *Relationship) WithProtocol(p string) *Relationship { r.Protocol = p; return r }
+func (r *Relationship) WithProtocol(p string) *Relationship {
+	if r == nil {
+		return nil
+	}
+	r.Protocol = p
+	return r
+}
 func (r *Relationship) AddMeta(k string, v any) *Relationship {
+	if r == nil {
+		return nil
+	}
 	r.Metadata[k] = v
 	return r
+}
+
+func (r *Relationship) GetID() string {
+	if r == nil {
+		return ""
+	}
+	return r.UniqueID
 }
 
 // --- ComposedOf ---
@@ -301,6 +388,9 @@ func (a *Architecture) DefineNode(id string, ntype NodeType, name, desc string, 
 
 // ConnectTo establishes a relationship from this node to another.
 func (n *Node) ConnectTo(dest *Node, desc string) *ConnectionBuilder {
+	if n == nil || dest == nil {
+		return &ConnectionBuilder{rel: &Relationship{}}
+	}
 	relID := fmt.Sprintf("%s-connects-%s", n.UniqueID, dest.UniqueID)
 	rel := &Relationship{
 		UniqueID:    relID,
@@ -322,18 +412,27 @@ func (n *Node) ConnectTo(dest *Node, desc string) *ConnectionBuilder {
 
 // WithID overrides the auto-generated relationship ID.
 func (cb *ConnectionBuilder) WithID(id string) *ConnectionBuilder {
+	if cb == nil || cb.rel == nil {
+		return nil
+	}
 	cb.rel.UniqueID = id
 	return cb
 }
 
 // Encrypted sets the encrypted flag.
 func (cb *ConnectionBuilder) Encrypted(e bool) *ConnectionBuilder {
+	if cb == nil || cb.rel == nil {
+		return nil
+	}
 	cb.rel.Encrypted = BoolPtr(e)
 	return cb
 }
 
 // Via specifies the interfaces for the connection.
 func (cb *ConnectionBuilder) Via(srcIntf, dstIntf string) *ConnectionBuilder {
+	if cb == nil || cb.rel == nil || cb.rel.RelationshipType.Connects == nil {
+		return nil
+	}
 	if srcIntf != "" {
 		cb.rel.RelationshipType.Connects.Source.Interfaces = []string{srcIntf}
 	} else {
@@ -349,24 +448,36 @@ func (cb *ConnectionBuilder) Via(srcIntf, dstIntf string) *ConnectionBuilder {
 
 // Tag adds metadata to the relationship.
 func (cb *ConnectionBuilder) Tag(key string, val any) *ConnectionBuilder {
+	if cb == nil || cb.rel == nil {
+		return nil
+	}
 	cb.rel.Metadata[key] = val
 	return cb
 }
 
 // Protocol sets the relationship protocol.
 func (cb *ConnectionBuilder) Protocol(p string) *ConnectionBuilder {
+	if cb == nil || cb.rel == nil {
+		return nil
+	}
 	cb.rel.Protocol = p
 	return cb
 }
 
 // Is sets the data classification.
 func (cb *ConnectionBuilder) Is(classification string) *ConnectionBuilder {
+	if cb == nil || cb.rel == nil {
+		return nil
+	}
 	cb.rel.DataClassification = classification
 	return cb
 }
 
 // GetID returns the relationship ID, useful for Flow definitions.
 func (cb *ConnectionBuilder) GetID() string {
+	if cb == nil || cb.rel == nil {
+		return ""
+	}
 	return cb.rel.UniqueID
 }
 
@@ -397,6 +508,9 @@ func (a *Architecture) DefineFlow(id, name, desc string) *FlowBuilder {
 }
 
 func (fb *FlowBuilder) Step(relID string, desc string) *FlowBuilder {
+	if fb == nil || fb.flow == nil {
+		return nil
+	}
 	fb.flow.Transitions = append(fb.flow.Transitions, Transition{
 		RelationshipID: relID,
 		SequenceNumber: len(fb.flow.Transitions) + 1,
@@ -407,6 +521,9 @@ func (fb *FlowBuilder) Step(relID string, desc string) *FlowBuilder {
 }
 
 func (fb *FlowBuilder) StepEx(relID, desc, dir string) *FlowBuilder {
+	if fb == nil || fb.flow == nil {
+		return nil
+	}
 	fb.flow.Transitions = append(fb.flow.Transitions, Transition{
 		RelationshipID: relID,
 		SequenceNumber: len(fb.flow.Transitions) + 1,
@@ -417,11 +534,17 @@ func (fb *FlowBuilder) StepEx(relID, desc, dir string) *FlowBuilder {
 }
 
 func (fb *FlowBuilder) Meta(k string, v any) *FlowBuilder {
+	if fb == nil || fb.flow == nil {
+		return nil
+	}
 	fb.flow.Metadata[k] = v
 	return fb
 }
 
 func (fb *FlowBuilder) MetaMap(m map[string]any) *FlowBuilder {
+	if fb == nil || fb.flow == nil {
+		return nil
+	}
 	for k, v := range m {
 		fb.flow.Metadata[k] = v
 	}
@@ -436,6 +559,9 @@ type StepSpec struct {
 }
 
 func (fb *FlowBuilder) Steps(specs ...StepSpec) *FlowBuilder {
+	if fb == nil {
+		return nil
+	}
 	for _, s := range specs {
 		dir := s.Dir
 		if dir == "" {
