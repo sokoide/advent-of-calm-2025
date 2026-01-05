@@ -88,7 +88,7 @@ function App() {
   }, [activeTab, fetchSVG]);
 
   const onResetLayout = useCallback(() => {
-    const layouted = getLayoutedElements(nodes, edges, 'LR');
+    const layouted = getLayoutedElements(nodes, edges, 'TB');
     const refreshedNodes = layouted.nodes.map((n) => ({
       ...n,
       position: { ...n.position },
@@ -266,9 +266,8 @@ function App() {
             <div className="flex-1 overflow-hidden bg-slate-800 p-6" onMouseLeave={stopPanning}>
               {svgCode ? (
                 <div
-                  className={`bg-white rounded-xl shadow-2xl p-6 w-full h-full select-none ${
-                    isPanning ? 'cursor-grabbing' : 'cursor-grab'
-                  }`}
+                  className={`bg-white rounded-xl shadow-2xl p-6 w-full h-full select-none ${isPanning ? 'cursor-grabbing' : 'cursor-grab'
+                    }`}
                   onMouseDown={(event) => {
                     if (event.button !== 0) return;
                     startPanning();
@@ -303,7 +302,7 @@ function App() {
               Read-only D2 Source
             </div>
             <div className="flex-1">
-              <CodeEditor value={d2Code} language="yaml" onChange={() => {}} readOnly />
+              <CodeEditor value={d2Code} language="yaml" onChange={() => { }} readOnly />
             </div>
           </div>
         )}
@@ -327,7 +326,7 @@ function App() {
                 </button>
               </div>
               <div className="flex-1 overflow-hidden p-4">
-                <CodeEditor value={previewCode} language="go" onChange={() => {}} readOnly />
+                <CodeEditor value={previewCode} language="go" onChange={() => { }} readOnly />
               </div>
               <div className="px-6 py-4 bg-slate-950 border-t border-slate-800 flex justify-end gap-4">
                 <button

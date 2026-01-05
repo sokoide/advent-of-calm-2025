@@ -4,8 +4,8 @@ import { type Node, type Edge, Position } from 'reactflow';
 // Node size constants
 const NODE_WIDTH = 200;
 const NODE_HEIGHT = 80;
-const CONTAINER_HEADER = 45;
-const PADDING = 30;
+const CONTAINER_HEADER = 50;
+const PADDING = 40;
 
 interface LayoutNode extends Node {
   width?: number;
@@ -57,10 +57,6 @@ export const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'T
   });
   containerNodes.sort((a, b) => (nodeDepth.get(b) || 0) - (nodeDepth.get(a) || 0));
 
-  // Get edges between specific nodes
-  const getEdgesBetween = (nodeIds: string[]): Edge[] => {
-    return edges.filter(e => nodeIds.includes(e.source) && nodeIds.includes(e.target));
-  };
 
   // Layout a group of nodes
   const layoutNodes = (nodeIds: string[], relevantEdges: Edge[]): { width: number, height: number } => {
@@ -69,9 +65,9 @@ export const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'T
     const g = new dagre.graphlib.Graph();
     g.setGraph({
       rankdir: direction,
-      nodesep: 60,
-      ranksep: 80,
-      align: 'DL',
+
+      nodesep: 100,
+      ranksep: 150,
       marginx: 0,
       marginy: 0
     });
@@ -85,9 +81,9 @@ export const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'T
       g.setNode(id, { width, height });
     });
 
-    // Add edges
+    // Add edges with weight and minlen to enforce hierarchy
     relevantEdges.forEach((edge) => {
-      g.setEdge(edge.source, edge.target);
+      g.setEdge(edge.source, edge.target, { weight: 2, minlen: 1 });
     });
 
     dagre.layout(g);
@@ -126,16 +122,54 @@ export const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'T
     };
   };
 
+  // Helper to find the direct child of a container that is an ancestor of the given node
+  const getDirectChildAncestor = (nodeId: string, containerId: string | null): string | null => {
+    let current = nodeId;
+    while (current) {
+      const node = nodes.find(n => n.id === current);
+      if (!node) return null;
+      if (node.parentNode === containerId) return current;
+      if (!node.parentNode) return containerId === null ? current : null; // Top-level check
+      current = node.parentNode;
+    }
+    return null;
+  };
+
+  // Helper function to layout a group of nodes (can be top-level or absolute container)
+  const layoutGroup = (groupId: string | null, nodeIds: string[]): { width: number, height: number } => {
+    if (nodeIds.length === 0) return { width: 0, height: 0 };
+
+    // Find edges where both source and target trace back to nodes in this group
+    const relevantEdges: Edge[] = [];
+    const addedEdges = new Set<string>();
+
+    edges.forEach((edge) => {
+      const sourceAncestor = getDirectChildAncestor(edge.source, groupId);
+      const targetAncestor = getDirectChildAncestor(edge.target, groupId);
+
+      if (sourceAncestor && targetAncestor &&
+        nodeIds.includes(sourceAncestor) && nodeIds.includes(targetAncestor) &&
+        sourceAncestor !== targetAncestor) {
+
+        const edgeKey = `${sourceAncestor}->${targetAncestor}`;
+        if (!addedEdges.has(edgeKey)) {
+          addedEdges.add(edgeKey);
+          // Use a higher weight for these "structural" edges
+          relevantEdges.push({ ...edge, id: edgeKey, source: sourceAncestor, target: targetAncestor });
+        }
+      }
+    });
+
+    return layoutNodes(nodeIds, relevantEdges);
+  };
+
   // STEP 1: Layout children inside each container (deepest containers first)
   containerNodes.forEach((containerId) => {
     const children = childrenMap.get(containerId) || [];
     if (children.length === 0) return;
 
-    // Get edges between children of this container
-    const childEdges = getEdgesBetween(children);
-
-    // Layout children
-    const size = layoutNodes(children, [...childEdges]);
+    // Layout children with recursive edge lifting
+    const size = layoutGroup(containerId, children);
 
     // Add padding and header to children positions
     children.forEach((childId) => {
@@ -148,7 +182,7 @@ export const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'T
       }
     });
 
-    // Update container size based on laid out children
+    // Update container size
     const container = nodeMap.get(containerId);
     if (container) {
       container.width = Math.max(size.width + PADDING * 2, NODE_WIDTH);
@@ -161,7 +195,7 @@ export const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'T
     }
   });
 
-  // STEP 2: Layout top-level nodes (including containers)
+  // STEP 2: Layout top-level nodes
   const topLevelNodes: string[] = [];
   nodes.forEach((node) => {
     if (!node.parentNode) {
@@ -169,33 +203,7 @@ export const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'T
     }
   });
 
-  // Create synthetic edges for layout
-  // Map edges that involve container children to the container itself
-  const topLevelEdges: Edge[] = [];
-  const addedEdges = new Set<string>();
-
-  // Helper to find the top-level ancestor
-  const getTopLevelAncestor = (nodeId: string): string => {
-    const node = nodes.find(n => n.id === nodeId);
-    if (!node?.parentNode) return nodeId;
-    return getTopLevelAncestor(node.parentNode);
-  };
-
-  edges.forEach((edge) => {
-    const source = getTopLevelAncestor(edge.source);
-    const target = getTopLevelAncestor(edge.target);
-
-    // Only add if both are top-level and edge is new
-    if (topLevelNodes.includes(source) && topLevelNodes.includes(target) && source !== target) {
-      const edgeKey = `${source}->${target}`;
-      if (!addedEdges.has(edgeKey)) {
-        addedEdges.add(edgeKey);
-        topLevelEdges.push({ ...edge, id: edgeKey, source, target });
-      }
-    }
-  });
-
-  layoutNodes(topLevelNodes, topLevelEdges);
+  layoutGroup(null, topLevelNodes);
 
   return {
     nodes: Array.from(nodeMap.values()),
