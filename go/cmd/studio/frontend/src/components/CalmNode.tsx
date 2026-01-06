@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
 import { NodeResizer } from '@reactflow/node-resizer';
 import '@reactflow/node-resizer/dist/style.css';
-import { Database, Server, Users, Box, MessageSquare } from 'lucide-react';
+import { Database, Server, Users, Box, MessageSquare, Shield } from 'lucide-react';
 
 const icons: Record<string, any> = {
   service: Server,
@@ -16,6 +16,8 @@ const CalmNode = ({ data, selected }: NodeProps) => {
   const type = data.calm['node-type'];
   const Icon = icons[type] || Box;
   const isContainer = data.isContainer === true;
+  const hasControls = data.hasControls === true;
+  const isComposedOfChild = data.isComposedOfChild === true;
 
   if (isContainer) {
     return (
@@ -61,7 +63,9 @@ const CalmNode = ({ data, selected }: NodeProps) => {
   }
 
   return (
-    <div className={`px-4 py-2 shadow-xl rounded-lg bg-slate-900 border-2 transition-all ${selected ? 'border-blue-500 ring-2 ring-blue-500/20 scale-105 z-50' : 'border-slate-800'}`}>
+    <div className={`px-4 py-2 shadow-xl rounded-lg bg-slate-900 border-2 transition-all relative
+      ${selected ? 'border-blue-500 ring-2 ring-blue-500/20 scale-105 z-50' : 'border-slate-800'}
+      ${isComposedOfChild ? 'ring-2 ring-purple-500/40' : ''}`}>
       <div className="flex items-center">
         <div className="rounded-full w-8 h-8 flex items-center justify-center bg-slate-800 mr-3">
           <Icon size={16} className="text-blue-400" />
@@ -71,6 +75,12 @@ const CalmNode = ({ data, selected }: NodeProps) => {
           <div className="text-sm font-semibold text-slate-200">{data.label}</div>
         </div>
       </div>
+
+      {hasControls && (
+        <div className="absolute -top-2 -right-2 bg-amber-600 rounded-full p-1" title="Has Controls (NFRs)">
+          <Shield size={10} className="text-white" />
+        </div>
+      )}
 
       <Handle type="target" position={Position.Top} className="w-2 h-2 !bg-slate-600 !border-slate-400" />
       <Handle type="source" position={Position.Bottom} className="w-2 h-2 !bg-slate-600 !border-slate-400" />

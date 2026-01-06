@@ -43,6 +43,7 @@ export const transformToReactFlow = (
     }
 
     const isContainer = allContainers.has(id);
+    const isComposedOfChild = nodeToParent.has(id);
 
     return {
       id,
@@ -50,7 +51,8 @@ export const transformToReactFlow = (
       data: {
         label: n.name,
         calm: n,
-        isContainer
+        isContainer,
+        isComposedOfChild,
       },
       position: pos,
       parentNode: parentId,

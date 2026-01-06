@@ -37,8 +37,10 @@ export interface PatchOperation {
   | 'update-flow'
   | 'delete-flow'
   | 'add-composed-of'
+  | 'update-composed-of'
   | 'delete-composed-of'
   | 'add-control'
+  | 'update-control'
   | 'delete-control';
   nodeId?: string;
   origin?: PatchOrigin;
@@ -55,9 +57,10 @@ export interface PatchOperation {
   flowSteps?: string[]; // For add-flow, update-flow (list of relationship IDs)
   containerId?: string; // For add-composed-of
   childNodeIds?: string[]; // For add-composed-of
-  composedOfId?: string; // For delete-composed-of
-  controlId?: string; // For add/delete-control
-  controlDesc?: string; // For add-control
+  composedOfId?: string; // For update/delete-composed-of
+  composedOfDesc?: string; // For update-composed-of
+  controlId?: string; // For add/update/delete-control
+  controlDesc?: string; // For add/update-control
 }
 
 export interface StudioAPI {

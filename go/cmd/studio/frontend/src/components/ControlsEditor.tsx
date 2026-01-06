@@ -1,18 +1,21 @@
 import { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Shield } from 'lucide-react';
+import { X, Plus, Trash2, Shield, Pencil, Check } from 'lucide-react';
 import type { CalmControl } from '../domain/calm';
 
 interface ControlsEditorProps {
     controls: Record<string, CalmControl>;
     onAddControl: (controlId: string, desc: string) => void;
+    onUpdateControl: (controlId: string, newDesc: string) => void;
     onDeleteControl: (controlId: string) => void;
     onClose: () => void;
 }
 
-const ControlsEditor = ({ controls, onAddControl, onDeleteControl, onClose }: ControlsEditorProps) => {
+const ControlsEditor = ({ controls, onAddControl, onUpdateControl, onDeleteControl, onClose }: ControlsEditorProps) => {
     const [controlId, setControlId] = useState('');
     const [controlDesc, setControlDesc] = useState('');
     const [controlList, setControlList] = useState<Array<{ id: string; control: CalmControl }>>([]);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editDesc, setEditDesc] = useState('');
 
     useEffect(() => {
         const list = Object.entries(controls || {}).map(([id, ctrl]) => ({ id, control: ctrl }));
@@ -35,6 +38,17 @@ const ControlsEditor = ({ controls, onAddControl, onDeleteControl, onClose }: Co
         }
     };
 
+    const handleEdit = (id: string, currentDesc: string) => {
+        setEditingId(id);
+        setEditDesc(currentDesc);
+    };
+
+    const handleSaveEdit = (id: string) => {
+        onUpdateControl(id, editDesc);
+        setEditingId(null);
+        setEditDesc('');
+    };
+
     return (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-xl flex flex-col max-h-[80vh]">
@@ -55,17 +69,45 @@ const ControlsEditor = ({ controls, onAddControl, onDeleteControl, onClose }: Co
                             </div>
                         ) : (
                             controlList.map(({ id, control }) => (
-                                <div key={id} className="flex items-start justify-between bg-slate-800/60 border border-slate-700/50 px-3 py-3 rounded group">
-                                    <div>
-                                        <div className="text-sm font-semibold text-slate-200">{id}</div>
-                                        <div className="text-xs text-slate-400 mt-1">{control.description}</div>
-                                    </div>
-                                    <button
-                                        onClick={() => handleDelete(id)}
-                                        className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
+                                <div key={id} className="bg-slate-800/60 border border-slate-700/50 px-3 py-3 rounded group">
+                                    {editingId === id ? (
+                                        <div className="space-y-2">
+                                            <div className="text-sm font-semibold text-slate-200">{id}</div>
+                                            <input
+                                                type="text"
+                                                value={editDesc}
+                                                onChange={(e) => setEditDesc(e.target.value)}
+                                                className="w-full bg-slate-950 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                                            />
+                                            <button
+                                                onClick={() => handleSaveEdit(id)}
+                                                className="text-green-400 hover:text-green-300 flex items-center gap-1 text-xs"
+                                            >
+                                                <Check size={14} /> Save
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-start justify-between">
+                                            <div>
+                                                <div className="text-sm font-semibold text-slate-200">{id}</div>
+                                                <div className="text-xs text-slate-400 mt-1">{control.description}</div>
+                                            </div>
+                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={() => handleEdit(id, control.description)}
+                                                    className="text-slate-500 hover:text-blue-400"
+                                                >
+                                                    <Pencil size={14} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(id)}
+                                                    className="text-slate-500 hover:text-red-400"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             ))
                         )}

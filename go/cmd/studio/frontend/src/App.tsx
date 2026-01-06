@@ -394,6 +394,20 @@ function App() {
               }
             }
           }}
+          onUpdateControl={async (controlId, controlDesc) => {
+            if (studio) {
+              try {
+                await studio.patchAST([{
+                  type: 'update-control',
+                  controlId,
+                  controlDesc,
+                }]);
+                setTimeout(() => fetchData(true), 500);
+              } catch (err) {
+                console.error('Failed to update control:', err);
+              }
+            }
+          }}
           onDeleteControl={async (controlId) => {
             if (studio) {
               try {

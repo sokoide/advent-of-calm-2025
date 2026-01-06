@@ -137,6 +137,22 @@ func (GoASTSyncer) ApplyPatch(src string, ops []domain.PatchOperation) (string, 
 			if err := deleteComposedOfFromAST(f, op.ComposedOfID); err != nil {
 				return "", fmt.Errorf("failed to delete composed-of %s: %w", op.ComposedOfID, err)
 			}
+		case domain.PatchUpdateComposedOf:
+			if op.ComposedOfID == "" {
+				log.Printf("Warning: update-composed-of requires composedOfId")
+				continue
+			}
+			if err := updateComposedOfInAST(f, op.ComposedOfID, op.ComposedOfDesc); err != nil {
+				return "", fmt.Errorf("failed to update composed-of %s: %w", op.ComposedOfID, err)
+			}
+		case domain.PatchUpdateControl:
+			if op.ControlID == "" {
+				log.Printf("Warning: update-control requires controlId")
+				continue
+			}
+			if err := updateControlInAST(f, op.ControlID, op.ControlDesc); err != nil {
+				return "", fmt.Errorf("failed to update control %s: %w", op.ControlID, err)
+			}
 		}
 	}
 
@@ -1202,4 +1218,110 @@ func insertControlIntoSource(src, controlID, desc string) string {
 	}
 
 	return src[:insertPoint] + controlCode + src[insertPoint:]
+}
+
+// updateComposedOfInAST updates the description of a ComposedOf call in the AST.
+func updateComposedOfInAST(f *ast.File, composedOfID, newDesc string) error {
+	found := false
+
+	ast.Inspect(f, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+
+		// Check if it's a ComposedOf call
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+
+		if sel.Sel.Name != "ComposedOf" {
+			return true
+		}
+
+		if len(call.Args) < 2 {
+			return true
+		}
+
+		// Check first argument (ID)
+		lit, ok := call.Args[0].(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return true
+		}
+
+		val := strings.Trim(lit.Value, "\"")
+		if val != composedOfID {
+			return true
+		}
+
+		// Update description (second argument)
+		if len(call.Args) >= 2 {
+			call.Args[1] = &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", newDesc)}
+		}
+
+		found = true
+		return false
+	})
+
+	if !found {
+		return fmt.Errorf("composed-of %q not found", composedOfID)
+	}
+	return nil
+}
+
+// updateControlInAST updates the description of an AddControl call in the AST.
+func updateControlInAST(f *ast.File, controlID, newDesc string) error {
+	found := false
+
+	ast.Inspect(f, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+
+		// Check if it's an AddControl call
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+
+		if sel.Sel.Name != "AddControl" {
+			return true
+		}
+
+		if len(call.Args) < 2 {
+			return true
+		}
+
+		// Check first argument (ID)
+		lit, ok := call.Args[0].(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return true
+		}
+
+		val := strings.Trim(lit.Value, "\"")
+		if val != controlID {
+			return true
+		}
+
+		// Update description (second argument)
+		call.Args[1] = &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", newDesc)}
+
+		found = true
+		return false
+	})
+
+	if !found {
+		return fmt.Errorf("control %q not found", controlID)
+	}
+	return nil
 }
