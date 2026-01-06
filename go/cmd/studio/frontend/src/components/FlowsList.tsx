@@ -1,31 +1,44 @@
-import { Trash2, AlertCircle } from 'lucide-react';
+import { Trash2, AlertCircle, Edit, Plus } from 'lucide-react';
 import type { CalmFlow } from '../domain/calm';
 
 interface FlowsListProps {
     flows: CalmFlow[];
     onDeleteFlow: (flowId: string) => void;
+    onEditFlow: (flow: CalmFlow) => void;
+    onAddFlow: () => void;
     onClose: () => void;
 }
 
-const FlowsList = ({ flows, onDeleteFlow, onClose }: FlowsListProps) => {
+const FlowsList = ({ flows, onDeleteFlow, onEditFlow, onAddFlow, onClose }: FlowsListProps) => {
     return (
         <div className="absolute left-4 top-16 w-80 bg-slate-900 shadow-2xl border border-slate-800 z-[100] flex flex-col rounded-lg animate-in fade-in zoom-in duration-200">
             <div className="p-3 border-b border-slate-800 bg-slate-900/50 flex justify-between items-center rounded-t-lg">
                 <h2 className="font-bold text-slate-200 text-sm flex items-center gap-2">
-                    Defind Flows
+                    Defined Flows
                     <span className="bg-slate-800 text-slate-400 text-[10px] px-1.5 py-0.5 rounded-full">{flows.length}</span>
                 </h2>
-                <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors text-xs">
-                    Close
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={onAddFlow}
+                        className="text-blue-400 hover:text-blue-300 transition-colors text-xs flex items-center gap-1 font-bold"
+                        title="Add New Flow"
+                    >
+                        <Plus size={14} /> New
+                    </button>
+                    <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors text-xs">
+                        Close
+                    </button>
+                </div>
             </div>
 
             <div className="max-h-[60vh] overflow-y-auto p-2 space-y-2">
                 {flows.length === 0 ? (
                     <div className="text-center p-6 text-slate-500 text-xs italic">
-                        No flows defined in this architecture.
+                        No flows defined.
                         <br />
-                        Create flows in Go code using <code className="bg-slate-800 px-1 rounded">a.DefineFlow()</code>.
+                        <button onClick={onAddFlow} className="text-blue-500 hover:underline mt-2">
+                            Create your first flow
+                        </button>
                     </div>
                 ) : (
                     flows.map((flow) => (
@@ -35,17 +48,26 @@ const FlowsList = ({ flows, onDeleteFlow, onClose }: FlowsListProps) => {
                                     <div className="text-sm font-semibold text-blue-300">{flow.name}</div>
                                     <div className="text-[10px] text-slate-500 font-mono mt-0.5">{flow['unique-id']}</div>
                                 </div>
-                                <button
-                                    onClick={() => {
-                                        if (confirm(`Delete flow "${flow.name}"?`)) {
-                                            onDeleteFlow(flow['unique-id']);
-                                        }
-                                    }}
-                                    className="text-slate-600 hover:text-red-400 p-1 rounded hover:bg-red-950/20 transition-colors opacity-0 group-hover:opacity-100"
-                                    title="Delete Flow"
-                                >
-                                    <Trash2 size={14} />
-                                </button>
+                                <div className="flex gap-1">
+                                    <button
+                                        onClick={() => onEditFlow(flow)}
+                                        className="text-slate-600 hover:text-blue-400 p-1 rounded hover:bg-blue-950/20 transition-colors opacity-0 group-hover:opacity-100"
+                                        title="Edit Flow"
+                                    >
+                                        <Edit size={14} />
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            if (confirm(`Delete flow "${flow.name}"?`)) {
+                                                onDeleteFlow(flow['unique-id']);
+                                            }
+                                        }}
+                                        className="text-slate-600 hover:text-red-400 p-1 rounded hover:bg-red-950/20 transition-colors opacity-0 group-hover:opacity-100"
+                                        title="Delete Flow"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="mt-2 text-xs text-slate-400 line-clamp-2">

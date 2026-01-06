@@ -89,6 +89,22 @@ func (GoASTSyncer) ApplyPatch(src string, ops []domain.PatchOperation) (string, 
 			if err := deleteFlowFromAST(f, op.FlowID); err != nil {
 				return "", fmt.Errorf("failed to delete flow %s: %w", op.FlowID, err)
 			}
+		case domain.PatchAddFlow:
+			if op.FlowID == "" || op.FlowName == "" {
+				log.Printf("Warning: add-flow requires flowId and flowName")
+				continue
+			}
+			if err := addFlowToAST(f, op.FlowID, op.FlowName, op.FlowDesc, op.FlowSteps); err != nil {
+				return "", fmt.Errorf("failed to add flow %s: %w", op.FlowID, err)
+			}
+		case domain.PatchUpdateFlow:
+			if op.FlowID == "" {
+				log.Printf("Warning: update-flow requires flowId")
+				continue
+			}
+			if err := updateFlowInAST(f, op.FlowID, op.FlowName, op.FlowDesc, op.FlowSteps); err != nil {
+				return "", fmt.Errorf("failed to update flow %s: %w", op.FlowID, err)
+			}
 		}
 	}
 
@@ -107,6 +123,18 @@ func (GoASTSyncer) ApplyPatch(src string, ops []domain.PatchOperation) (string, 
 			pendingRelationship.isInteracts,
 		)
 		pendingRelationship.pending = false
+	}
+
+	// If there's a pending flow to add, insert it into the source
+	if pendingFlow.pending {
+		result = insertFlowIntoSource(
+			result,
+			pendingFlow.id,
+			pendingFlow.name,
+			pendingFlow.desc,
+			pendingFlow.steps,
+		)
+		pendingFlow.pending = false
 	}
 
 	return result, nil
@@ -730,4 +758,152 @@ func isDefineFlowCallWithID(stmt ast.Stmt, flowID string) bool {
 			return false
 		}
 	}
+}
+
+// addFlowToAST adds a new DefineFlow call to the source.
+// It inserts the code textually into wireComponents for simplicity.
+func addFlowToAST(f *ast.File, flowID, name, desc string, steps []string) error {
+	pendingFlow.id = flowID
+	pendingFlow.name = name
+	pendingFlow.desc = desc
+	pendingFlow.steps = steps
+	pendingFlow.pending = true
+
+	log.Printf("📝 Adding Flow: %s", flowID)
+	return nil
+}
+
+var pendingFlow struct {
+	id, name, desc string
+	steps          []string
+	pending        bool
+}
+
+// insertFlowIntoSource inserts a DefineFlow call into the Go source code.
+// It inserts into wireComponents before "return lc".
+func insertFlowIntoSource(src string, flowID, name, desc string, steps []string) string {
+	stepsCode := ""
+	for _, stepID := range steps {
+		// Use quotes for ID as it's a string literal in the generated call
+		stepsCode += fmt.Sprintf("\t\t\tdomain.StepSpec{ID: \"%s\"},\n", stepID)
+	}
+
+	flowCode := fmt.Sprintf(`
+	// GUI-generated flow: %s
+	a.DefineFlow("%s", "%s", "%s").
+		Steps(
+%s		)
+`, flowID, flowID, name, desc, stepsCode)
+
+	// Find "return lc" in wireComponents and insert before it
+	pattern := "\treturn lc\n"
+	insertPoint := strings.LastIndex(src, pattern)
+	if insertPoint == -1 {
+		pattern = "return lc"
+		insertPoint = strings.LastIndex(src, pattern)
+	}
+
+	if insertPoint == -1 {
+		log.Printf("Warning: Could not find insertion point in wireComponents")
+		return src
+	}
+
+	return src[:insertPoint] + flowCode + src[insertPoint:]
+}
+
+// updateFlowInAST updates an existing DefineFlow call.
+func updateFlowInAST(f *ast.File, flowID, name, desc string, steps []string) error {
+	found := false
+
+	ast.Inspect(f, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+
+		// Look for statement containing DefineFlow
+		stmt, ok := n.(ast.Stmt)
+		if !ok {
+			return true
+		}
+
+		if !isDefineFlowCallWithID(stmt, flowID) {
+			return true
+		}
+
+		// Found the statement. Now we need to update arguments of DefineFlow and Steps.
+		exprStmt, ok := stmt.(*ast.ExprStmt)
+		if !ok {
+			return true
+		}
+
+		// Traverse chain to find DefineFlow and Steps calls
+		var defineFlowCall *ast.CallExpr
+		var stepsCall *ast.CallExpr
+
+		curr := exprStmt.X
+		for {
+			call, ok := curr.(*ast.CallExpr)
+			if !ok {
+				break
+			}
+
+			if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
+				if sel.Sel.Name == "DefineFlow" {
+					defineFlowCall = call
+				} else if sel.Sel.Name == "Steps" {
+					stepsCall = call
+				}
+				curr = sel.X
+			} else {
+				break
+			}
+		}
+
+		if defineFlowCall != nil {
+			// Update Name (arg 1) and Desc (arg 2)
+			// Arg 0 is ID
+			if len(defineFlowCall.Args) >= 3 {
+				defineFlowCall.Args[1] = &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", name)}
+				defineFlowCall.Args[2] = &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", desc)}
+			}
+		}
+
+		if stepsCall != nil {
+			// Update Steps args
+			newArgs := make([]ast.Expr, 0, len(steps))
+			for _, stepID := range steps {
+				// domain.StepSpec{ID: "stepID"}
+				val := &ast.CompositeLit{
+					Type: &ast.SelectorExpr{
+						X:   &ast.Ident{Name: "domain"},
+						Sel: &ast.Ident{Name: "StepSpec"},
+					},
+					Elts: []ast.Expr{
+						&ast.KeyValueExpr{
+							Key:   &ast.Ident{Name: "ID"},
+							Value: &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", stepID)},
+						},
+						// We don't preserve description for now as it's hard to track
+					},
+				}
+				newArgs = append(newArgs, val)
+			}
+			stepsCall.Args = newArgs
+		} else {
+			// If Steps() call is missing, we need to append it.
+			// Ideally we would wrap the existing expression `X` with `CallExpr{Fun: SelectorExpr{X: X, Sel: "Steps"}, Args: ...}`
+			// But since we can't easily modify the structure here without re-writing the whole statement,
+			// we will log a warning.
+			// TODO: Implement adding Steps() if missing.
+			log.Printf("Warning: Steps() call not found for flow %s, skipping steps update", flowID)
+		}
+
+		found = true
+		return false
+	})
+
+	if !found {
+		return fmt.Errorf("flow %q not found", flowID)
+	}
+	return nil
 }

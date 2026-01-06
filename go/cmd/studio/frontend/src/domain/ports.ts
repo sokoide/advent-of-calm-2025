@@ -25,17 +25,30 @@ export interface PatchOrigin {
 }
 
 export interface PatchOperation {
-  type: 'update-node' | 'delete-node' | 'update-count' | 'delete-relationship' | 'add-relationship' | 'add-interface' | 'delete-interface' | 'delete-flow';
+  type:
+  | 'update-node'
+  | 'delete-node'
+  | 'update-count'
+  | 'delete-relationship'
+  | 'add-relationship'
+  | 'add-interface'
+  | 'delete-interface'
+  | 'add-flow'
+  | 'update-flow'
+  | 'delete-flow';
   nodeId?: string;
   origin?: PatchOrigin;
   property?: string;
   value?: any;
-  sourceNode?: string;
-  targetNode?: string;
-  isInteracts?: boolean;
-  interfaceId?: string; // For add/delete interface
-  protocol?: string;    // For add interface
-  flowId?: string;      // For delete-flow
+  sourceNode?: string; // For add-relationship
+  targetNode?: string; // For add-relationship
+  isInteracts?: boolean; // For add-relationship
+  interfaceId?: string; // For add/delete-interface
+  protocol?: string; // For add-interface
+  flowId?: string; // For delete-flow, add-flow, update-flow
+  flowName?: string; // For add-flow, update-flow
+  flowDesc?: string; // For add-flow, update-flow
+  flowSteps?: string[]; // For add-flow, update-flow (list of relationship IDs)
 }
 
 export interface StudioAPI {

@@ -17,6 +17,7 @@ import { useNodeOperations } from './hooks/useNodeOperations';
 import { useD2Viewer } from './hooks/useD2Viewer';
 
 import FlowsList from './components/FlowsList';
+import FlowEditor from './components/FlowEditor';
 import type { CalmFlow } from './domain/calm';
 
 function App() {
@@ -27,8 +28,12 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabType>('merged');
   const [showDiff, setShowDiff] = useState(false);
   const [previewCode, setPreviewCode] = useState('');
+
+  // Flow management state
   const [showFlows, setShowFlows] = useState(false);
   const [flows, setFlows] = useState<CalmFlow[]>([]);
+  const [showFlowEditor, setShowFlowEditor] = useState(false);
+  const [editingFlow, setEditingFlow] = useState<CalmFlow | null>(null);
 
   const { zoom: d2Zoom, pan: d2Pan, isPanning, zoomIn, zoomOut, reset, startPanning, stopPanning, movePan } = useD2Viewer();
 
@@ -135,6 +140,31 @@ function App() {
       } catch (err) {
         console.error('Failed to delete flow:', err);
       }
+    }
+  };
+
+  const handleSaveFlow = async (flowId: string, name: string, desc: string, steps: string[]) => {
+    if (!studio) return;
+
+    try {
+      // Check if we are updating or adding
+      const isUpdate = flows.some(f => f['unique-id'] === flowId);
+
+      await studio.patchAST([
+        {
+          type: isUpdate ? 'update-flow' : 'add-flow',
+          flowId,
+          flowName: name,
+          flowDesc: desc,
+          flowSteps: steps,
+        }
+      ]);
+
+      setShowFlowEditor(false);
+      setEditingFlow(null);
+      setTimeout(() => fetchData(true), 500);
+    } catch (err) {
+      console.error('Failed to save flow:', err);
     }
   };
 
@@ -269,7 +299,26 @@ function App() {
         <FlowsList
           flows={flows}
           onDeleteFlow={handleDeleteFlow}
+          onEditFlow={(flow) => {
+            setEditingFlow(flow);
+            setShowFlowEditor(true);
+          }}
+          onAddFlow={() => {
+            setEditingFlow(null);
+            setShowFlowEditor(true);
+          }}
           onClose={() => setShowFlows(false)}
+        />
+      )}
+      {showFlowEditor && (
+        <FlowEditor
+          flow={editingFlow}
+          relationships={edges}
+          onSave={handleSaveFlow}
+          onClose={() => {
+            setShowFlowEditor(false);
+            setEditingFlow(null);
+          }}
         />
       )}
     </>

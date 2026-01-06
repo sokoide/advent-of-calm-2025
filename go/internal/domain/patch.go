@@ -11,6 +11,8 @@ const (
 	PatchAddRelationship    PatchType = "add-relationship"
 	PatchAddInterface       PatchType = "add-interface"
 	PatchDeleteInterface    PatchType = "delete-interface"
+	PatchAddFlow            PatchType = "add-flow"
+	PatchUpdateFlow         PatchType = "update-flow"
 	PatchDeleteFlow         PatchType = "delete-flow"
 )
 
@@ -26,7 +28,10 @@ type PatchOperation struct {
 	IsInteracts bool         `json:"isInteracts,omitempty"` // For add-relationship: use Interacts() instead of Connect()
 	InterfaceID string       `json:"interfaceId,omitempty"` // For add/delete-interface
 	Protocol    string       `json:"protocol,omitempty"`    // For add-interface
-	FlowID      string       `json:"flowId,omitempty"`      // For delete-flow
+	FlowID      string       `json:"flowId,omitempty"`      // For delete-flow, update-flow
+	FlowName    string       `json:"flowName,omitempty"`    // For add-flow, update-flow
+	FlowDesc    string       `json:"flowDesc,omitempty"`    // For add-flow, update-flow
+	FlowSteps   []string     `json:"flowSteps,omitempty"`   // For add-flow, update-flow (list of relationship IDs)
 }
 
 // PatchOrigin carries the necessary info to locate the code.
