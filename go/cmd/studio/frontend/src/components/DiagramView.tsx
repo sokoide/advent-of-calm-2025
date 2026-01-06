@@ -39,6 +39,7 @@ interface DiagramViewProps {
   onAddNode: () => void;
   onResetLayout: () => void;
   onDeleteEdge?: (id: string) => void;
+  onEdgeClick?: (event: React.MouseEvent, edge: Edge) => void;
 }
 
 const DiagramView = ({
@@ -53,6 +54,7 @@ const DiagramView = ({
   onAddNode,
   onResetLayout,
   onDeleteEdge,
+  onEdgeClick,
 }: DiagramViewProps) => {
   // Inject onDelete callback into each edge's data
   const edgesWithData = useMemo(() => {
@@ -77,6 +79,7 @@ const DiagramView = ({
         onConnect={onConnect}
         onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
+        onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
         fitView
       >

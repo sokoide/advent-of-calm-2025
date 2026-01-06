@@ -114,27 +114,61 @@ export const transformToReactFlow = (
     node.style = { ...node.style, width: size.width, height: size.height };
   });
 
-  // 3. Generate Edges
+  // 3. Build a set of relationship IDs referenced in flows
+  const flowReferencedRelationships = new Map<string, string[]>();
+  if (arch.flows) {
+    arch.flows.forEach((flow) => {
+      if (flow.transitions) {
+        flow.transitions.forEach((t) => {
+          const relId = t['relationship-unique-id'];
+          if (relId) {
+            const existing = flowReferencedRelationships.get(relId) || [];
+            existing.push(flow.name || flow['unique-id']);
+            flowReferencedRelationships.set(relId, existing);
+          }
+        });
+      }
+    });
+  }
+
+  // 4. Generate Edges with flow reference info
   const edges: Edge[] = [];
   arch.relationships.forEach((rel) => {
     const relType = rel['relationship-type'];
+    const relId = rel['unique-id'];
+    const flowRefs = flowReferencedRelationships.get(relId);
+
     if (relType.connects) {
       edges.push({
-        id: rel['unique-id'],
+        id: relId,
         source: relType.connects.source.node,
         target: relType.connects.destination.node,
         label: rel.description,
         animated: true,
+        data: {
+          calm: rel,
+          referencedInFlow: !!flowRefs,
+          flowNames: flowRefs || [],
+        },
       });
     }
     if (relType.interacts) {
       const actor = relType.interacts.actor;
       relType.interacts.nodes.forEach((targetNode, idx) => {
+        const edgeId = `${relId}-${idx}`;
+        // Check if base ID or full ID is referenced
+        const isReferenced = flowReferencedRelationships.has(relId);
+        const refs = flowReferencedRelationships.get(relId);
         edges.push({
-          id: `${rel['unique-id']}-${idx}`,
+          id: edgeId,
           source: actor,
           target: targetNode,
           label: rel.description,
+          data: {
+            calm: rel,
+            referencedInFlow: isReferenced,
+            flowNames: refs || [],
+          },
         });
       });
     }

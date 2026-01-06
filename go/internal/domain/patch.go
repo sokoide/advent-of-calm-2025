@@ -13,13 +13,14 @@ const (
 
 // PatchOperation represents a single change to the source code.
 type PatchOperation struct {
-	Type       PatchType    `json:"type"`
-	NodeID     string       `json:"nodeId,omitempty"`
-	Origin     *PatchOrigin `json:"origin,omitempty"`
-	Property   string       `json:"property,omitempty"`   // For update-node
-	Value      interface{}  `json:"value,omitempty"`      // For update-node or update-count
-	SourceNode string       `json:"sourceNode,omitempty"` // For add-relationship
-	TargetNode string       `json:"targetNode,omitempty"` // For add-relationship
+	Type        PatchType    `json:"type"`
+	NodeID      string       `json:"nodeId,omitempty"`
+	Origin      *PatchOrigin `json:"origin,omitempty"`
+	Property    string       `json:"property,omitempty"`    // For update-node
+	Value       interface{}  `json:"value,omitempty"`       // For update-node or update-count
+	SourceNode  string       `json:"sourceNode,omitempty"`  // For add-relationship
+	TargetNode  string       `json:"targetNode,omitempty"`  // For add-relationship
+	IsInteracts bool         `json:"isInteracts,omitempty"` // For add-relationship: use Interacts() instead of Connect()
 }
 
 // PatchOrigin carries the necessary info to locate the code.

@@ -32,6 +32,7 @@ export interface PatchOperation {
   value?: any;
   sourceNode?: string;
   targetNode?: string;
+  isInteracts?: boolean;
 }
 
 export interface StudioAPI {

@@ -54,12 +54,12 @@ func (GoASTSyncer) ApplyPatch(src string, ops []domain.PatchOperation) (string, 
 				return "", fmt.Errorf("failed to delete relationship %s: %w", op.NodeID, err)
 			}
 		case domain.PatchAddRelationship:
-			// Add a new Connect() call
+			// Add a new Connect() or Interacts() call
 			if op.NodeID == "" || op.SourceNode == "" || op.TargetNode == "" {
 				log.Printf("Warning: add-relationship requires nodeId, sourceNode, and targetNode")
 				continue
 			}
-			if err := addRelationshipToAST(f, fset, op.NodeID, op.SourceNode, op.TargetNode); err != nil {
+			if err := addRelationshipToAST(f, fset, op.NodeID, op.SourceNode, op.TargetNode, op.IsInteracts); err != nil {
 				return "", fmt.Errorf("failed to add relationship %s: %w", op.NodeID, err)
 			}
 		}
@@ -72,7 +72,13 @@ func (GoASTSyncer) ApplyPatch(src string, ops []domain.PatchOperation) (string, 
 
 	// If there's a pending relationship to add, insert it into the source
 	if pendingRelationship.pending {
-		result = insertRelationshipIntoSource(result, pendingRelationship.id, pendingRelationship.source, pendingRelationship.target)
+		result = insertRelationshipIntoSource(
+			result,
+			pendingRelationship.id,
+			pendingRelationship.source,
+			pendingRelationship.target,
+			pendingRelationship.isInteracts,
+		)
 		pendingRelationship.pending = false
 	}
 
@@ -329,48 +335,62 @@ func containsRelationshipWithID(stmt ast.Stmt, relationshipID string) bool {
 // appended to the formatted source code at the end of ApplyPatch.
 var pendingRelationship struct {
 	id, source, target string
+	isInteracts        bool
 	pending            bool
 }
 
-func addRelationshipToAST(f *ast.File, fset *token.FileSet, relationshipID, sourceNode, targetNode string) error {
+func addRelationshipToAST(
+	f *ast.File,
+	fset *token.FileSet,
+	relationshipID, sourceNode, targetNode string,
+	isInteracts bool,
+) error {
 	// Store the relationship for later source code insertion
 	pendingRelationship.id = relationshipID
 	pendingRelationship.source = sourceNode
 	pendingRelationship.target = targetNode
+	pendingRelationship.isInteracts = isInteracts
 	pendingRelationship.pending = true
 
-	log.Printf("📝 Adding relationship: %s from %s to %s", relationshipID, sourceNode, targetNode)
+	if isInteracts {
+		log.Printf("📝 Adding Interacts: %s from %s to %s", relationshipID, sourceNode, targetNode)
+	} else {
+		log.Printf("📝 Adding Connect: %s from %s to %s", relationshipID, sourceNode, targetNode)
+	}
 	return nil
 }
 
-// insertRelationshipIntoSource inserts a Connect() call into the Go source code.
+// insertRelationshipIntoSource inserts a Connect() or Interacts() call into the Go source code.
 // It looks for the wireComponents function and inserts before "return lc".
-func insertRelationshipIntoSource(src, relationshipID, sourceNode, targetNode string) string {
-	// Generate the Connect() line to insert
-	// Format: a.Connect("id", "Connection from source to target", nodeVar1.Unique, nodeVar2.UniqueID)
-	// Since we don't have node variable names, we use a simplified inline format
-	connectLine := fmt.Sprintf(`
+func insertRelationshipIntoSource(src, relationshipID, sourceNode, targetNode string, isInteracts bool) string {
+	// Generate the relationship line to insert
+	var relationshipLine string
+	if isInteracts {
+		relationshipLine = fmt.Sprintf(`
+	// GUI-generated interaction: %s
+	a.Interacts("%s", "Interaction from %s to %s", "%s", "%s")
+`, relationshipID, relationshipID, sourceNode, targetNode, sourceNode, targetNode)
+	} else {
+		relationshipLine = fmt.Sprintf(`
 	// GUI-generated connection: %s
 	a.Connect("%s", "Connection from %s to %s", "%s", "%s")
 `, relationshipID, relationshipID, sourceNode, targetNode, sourceNode, targetNode)
+	}
 
 	// Find "return lc" in wireComponents and insert before it
-	// Use a pattern that matches the return statement with proper indentation
 	pattern := "\treturn lc\n"
 	insertPoint := strings.LastIndex(src, pattern)
 	if insertPoint == -1 {
-		// Fallback: try to find "return lc" anywhere
 		pattern = "return lc"
 		insertPoint = strings.LastIndex(src, pattern)
 	}
 
 	if insertPoint == -1 {
-		log.Printf("Warning: Could not find insertion point for Connect() in wireComponents")
+		log.Printf("Warning: Could not find insertion point in wireComponents")
 		return src
 	}
 
-	// Insert before the return statement
-	return src[:insertPoint] + connectLine + src[insertPoint:]
+	return src[:insertPoint] + relationshipLine + src[insertPoint:]
 }
 
 func updateLoopVariable(f *ast.File, varName string, delta int) error {

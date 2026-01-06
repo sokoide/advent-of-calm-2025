@@ -1,10 +1,12 @@
 import { memo } from 'react';
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from 'reactflow';
-import { X } from 'lucide-react';
+import { X, AlertTriangle } from 'lucide-react';
 
 interface DeletableEdgeProps extends EdgeProps {
     data?: {
         onDelete?: (id: string) => void;
+        referencedInFlow?: boolean;
+        flowNames?: string[];
     };
 }
 
@@ -30,10 +32,19 @@ const DeletableEdge = ({
         targetPosition,
     });
 
+    const isProtected = data?.referencedInFlow;
+    const flowNames = data?.flowNames || [];
+
     const onEdgeClick = (evt: React.MouseEvent) => {
         evt.stopPropagation();
+
+        if (isProtected) {
+            alert(`この Relationship は Flow で参照されているため削除できません。\n\n参照元 Flow:\n- ${flowNames.join('\n- ')}`);
+            return;
+        }
+
         if (data?.onDelete) {
-            if (confirm('Are you sure you want to delete this relationship?')) {
+            if (confirm('このRelationshipを削除しますか？')) {
                 data.onDelete(id);
             }
         }
@@ -52,14 +63,18 @@ const DeletableEdge = ({
                     className="nodrag nopan group"
                 >
                     {label && (
-                        <div className="bg-slate-800/90 text-slate-300 text-xs px-2 py-1 rounded border border-slate-700 mb-1">
+                        <div className="bg-slate-800/90 text-slate-300 text-xs px-2 py-1 rounded border border-slate-700 mb-1 flex items-center gap-1">
+                            {isProtected && <AlertTriangle size={12} className="text-yellow-500" />}
                             {label}
                         </div>
                     )}
                     <button
                         onClick={onEdgeClick}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity bg-red-600 hover:bg-red-500 text-white rounded-full p-1 shadow-lg"
-                        title="Delete relationship"
+                        className={`opacity-0 group-hover:opacity-100 transition-opacity rounded-full p-1 shadow-lg ${isProtected
+                                ? 'bg-gray-600 hover:bg-gray-500 text-gray-300 cursor-not-allowed'
+                                : 'bg-red-600 hover:bg-red-500 text-white'
+                            }`}
+                        title={isProtected ? 'Flowで参照されているため削除不可' : 'Relationshipを削除'}
                     >
                         <X size={12} />
                     </button>

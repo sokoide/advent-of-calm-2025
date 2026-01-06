@@ -27,6 +27,20 @@ const CalmNode = ({ data, selected }: NodeProps) => {
           minHeight={150}
           handleClassName="nodrag"
           lineClassName="nodrag"
+          handleStyle={{
+            width: 12,
+            height: 12,
+            backgroundColor: '#3b82f6',
+            border: '2px solid white',
+            borderRadius: 2,
+            zIndex: 100,
+          }}
+          onResizeStart={() => {
+            document.body.style.cursor = 'nwse-resize';
+          }}
+          onResizeEnd={() => {
+            document.body.style.cursor = 'auto';
+          }}
         />
         <div
           className={`w-full h-full rounded-xl border shadow-inner ${selected ? 'border-blue-500/70 ring-2 ring-blue-500/20' : 'border-slate-700/60'

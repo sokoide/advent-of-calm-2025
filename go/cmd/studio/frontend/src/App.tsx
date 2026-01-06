@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { addEdge, type Node, type Connection } from 'reactflow';
+import { addEdge, type Node, type Edge, type Connection } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Monitor, RefreshCw, CheckCircle2, Save } from 'lucide-react';
 import * as Resizable from 'react-resizable-panels';
@@ -8,6 +8,7 @@ import { getLayoutedElements } from './utils/layout';
 import type { StudioUseCase } from './usecase/studio';
 import { createStudioUseCase } from './infra/studioApi';
 import Sidebar from './components/Sidebar';
+import EdgeSidebar from './components/EdgeSidebar';
 import DiagramView from './components/DiagramView';
 import CodeEditor from './components/CodeEditor';
 import TabNav, { type TabType } from './components/TabNav';
@@ -19,6 +20,7 @@ function App() {
   const [studio, setStudio] = useState<StudioUseCase | null>(null);
   const [useLocalAgent, setUseLocalAgent] = useState(false);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('merged');
   const [showDiff, setShowDiff] = useState(false);
   const [previewCode, setPreviewCode] = useState('');
@@ -112,12 +114,17 @@ function App() {
       // Call backend to add relationship to Go DSL
       if (studio && params.source && params.target) {
         try {
+          // Check if source node is an Actor - use Interacts() instead of Connect()
+          const sourceNode = nodes.find((n) => n.id === params.source);
+          const isActor = sourceNode?.type === 'actor';
+
           await studio.patchAST([
             {
               type: 'add-relationship',
               nodeId: newEdgeId,
               sourceNode: params.source,
               targetNode: params.target,
+              isInteracts: isActor,
             },
           ]);
           // Refresh after backend updates
@@ -127,7 +134,7 @@ function App() {
         }
       }
     },
-    [setEdges, studio, fetchData]
+    [setEdges, studio, fetchData, nodes]
   );
 
   const handleGoCodeChange = async (val: string | undefined) => {
@@ -194,8 +201,16 @@ function App() {
       onNodeDragStop={onNodeDragStop}
       onNodeClick={(_, node) => {
         setSelectedNode(node);
+        setSelectedEdge(null);
       }}
-      onPaneClick={() => setSelectedNode(null)}
+      onEdgeClick={(_, edge) => {
+        setSelectedEdge(edge);
+        setSelectedNode(null);
+      }}
+      onPaneClick={() => {
+        setSelectedNode(null);
+        setSelectedEdge(null);
+      }}
       onAddNode={onAddNode}
       onResetLayout={onResetLayout}
       onDeleteEdge={onDeleteEdge}
@@ -358,6 +373,11 @@ function App() {
           onUpdate={onUpdateNode}
           onDelete={onDeleteNode}
           onClose={() => setSelectedNode(null)}
+        />
+
+        <EdgeSidebar
+          selectedEdge={selectedEdge}
+          onClose={() => setSelectedEdge(null)}
         />
 
         {showDiff && (
