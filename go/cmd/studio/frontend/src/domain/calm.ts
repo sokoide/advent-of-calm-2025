@@ -5,7 +5,19 @@ export interface CalmArchitecture {
   nodes: CalmNode[];
   relationships: CalmRelationship[];
   flows?: CalmFlow[];
+  controls?: Record<string, CalmControl>;
   metadata?: Record<string, any>;
+}
+
+export interface CalmControl {
+  description: string;
+  requirements?: CalmRequirement[];
+}
+
+export interface CalmRequirement {
+  "requirement-url": string;
+  config?: any;
+  "config-url"?: string;
 }
 
 export type NodeOriginType = 'explicit' | 'loop' | 'function';

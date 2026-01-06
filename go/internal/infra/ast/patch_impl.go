@@ -105,6 +105,38 @@ func (GoASTSyncer) ApplyPatch(src string, ops []domain.PatchOperation) (string, 
 			if err := updateFlowInAST(f, op.FlowID, op.FlowName, op.FlowDesc, op.FlowSteps); err != nil {
 				return "", fmt.Errorf("failed to update flow %s: %w", op.FlowID, err)
 			}
+		case domain.PatchAddComposedOf:
+			if op.ContainerID == "" || len(op.ChildNodeIDs) == 0 {
+				log.Printf("Warning: add-composed-of requires containerId and childNodeIds")
+				continue
+			}
+			if err := addComposedOfToAST(f, op.NodeID, op.ContainerID, op.ChildNodeIDs); err != nil {
+				return "", fmt.Errorf("failed to add composed-of: %w", err)
+			}
+		case domain.PatchAddControl:
+			if op.ControlID == "" {
+				log.Printf("Warning: add-control requires controlId")
+				continue
+			}
+			if err := addControlToAST(f, op.ControlID, op.ControlDesc); err != nil {
+				return "", fmt.Errorf("failed to add control %s: %w", op.ControlID, err)
+			}
+		case domain.PatchDeleteControl:
+			if op.ControlID == "" {
+				log.Printf("Warning: delete-control requires controlId")
+				continue
+			}
+			if err := deleteControlFromAST(f, op.ControlID); err != nil {
+				return "", fmt.Errorf("failed to delete control %s: %w", op.ControlID, err)
+			}
+		case domain.PatchDeleteComposedOf:
+			if op.ComposedOfID == "" {
+				log.Printf("Warning: delete-composed-of requires composedOfId")
+				continue
+			}
+			if err := deleteComposedOfFromAST(f, op.ComposedOfID); err != nil {
+				return "", fmt.Errorf("failed to delete composed-of %s: %w", op.ComposedOfID, err)
+			}
 		}
 	}
 
@@ -135,6 +167,27 @@ func (GoASTSyncer) ApplyPatch(src string, ops []domain.PatchOperation) (string, 
 			pendingFlow.steps,
 		)
 		pendingFlow.pending = false
+	}
+
+	// If there's a pending composed-of to add, insert it into the source
+	if pendingComposedOf.pending {
+		result = insertComposedOfIntoSource(
+			result,
+			pendingComposedOf.id,
+			pendingComposedOf.containerID,
+			pendingComposedOf.childNodeIDs,
+		)
+		pendingComposedOf.pending = false
+	}
+
+	// If there's a pending control to add, insert it into the source
+	if pendingControl.pending {
+		result = insertControlIntoSource(
+			result,
+			pendingControl.id,
+			pendingControl.desc,
+		)
+		pendingControl.pending = false
 	}
 
 	return result, nil
@@ -906,4 +959,247 @@ func updateFlowInAST(f *ast.File, flowID, name, desc string, steps []string) err
 		return fmt.Errorf("flow %q not found", flowID)
 	}
 	return nil
+}
+
+// --- ComposedOf helpers ---
+
+var pendingComposedOf struct {
+	id           string
+	containerID  string
+	childNodeIDs []string
+	pending      bool
+}
+
+// addComposedOfToAST adds a new ComposedOf relationship to the source.
+// It uses textual insertion for simplicity.
+func addComposedOfToAST(f *ast.File, id, containerID string, childNodeIDs []string) error {
+	if id == "" {
+		id = fmt.Sprintf("composed-%s", containerID)
+	}
+	pendingComposedOf.id = id
+	pendingComposedOf.containerID = containerID
+	pendingComposedOf.childNodeIDs = childNodeIDs
+	pendingComposedOf.pending = true
+
+	log.Printf("📝 Adding ComposedOf: %s (container: %s)", id, containerID)
+	return nil
+}
+
+// insertComposedOfIntoSource inserts a ComposedOf call into the Go source code.
+func insertComposedOfIntoSource(src, id, containerID string, childNodeIDs []string) string {
+	// Build the node IDs slice: []string{"n1", "n2"}
+	nodeLiterals := ""
+	for i, nid := range childNodeIDs {
+		if i > 0 {
+			nodeLiterals += ", "
+		}
+		nodeLiterals += fmt.Sprintf("%q", nid)
+	}
+
+	composedCode := fmt.Sprintf(`
+	// GUI-generated composed-of: %s
+	a.ComposedOf("%s", "Container relationship", %s, []string{%s})
+`, id, id, containerID, nodeLiterals)
+
+	// Find "return lc" and insert before it
+	pattern := "\treturn lc\n"
+	insertPoint := strings.LastIndex(src, pattern)
+	if insertPoint == -1 {
+		pattern = "return lc"
+		insertPoint = strings.LastIndex(src, pattern)
+	}
+
+	if insertPoint == -1 {
+		log.Printf("Warning: Could not find insertion point for ComposedOf")
+		return src
+	}
+
+	return src[:insertPoint] + composedCode + src[insertPoint:]
+}
+
+// deleteComposedOfFromAST removes a ComposedOf call from the AST.
+func deleteComposedOfFromAST(f *ast.File, composedOfID string) error {
+	found := false
+
+	ast.Inspect(f, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+
+		block, ok := n.(*ast.BlockStmt)
+		if !ok {
+			return true
+		}
+
+		newList := make([]ast.Stmt, 0, len(block.List))
+		for _, stmt := range block.List {
+			if isComposedOfCallWithID(stmt, composedOfID) {
+				found = true
+				continue // Skip this statement to delete it
+			}
+			newList = append(newList, stmt)
+		}
+
+		if found {
+			block.List = newList
+		}
+
+		return true
+	})
+
+	if !found {
+		return fmt.Errorf("composed-of %q not found", composedOfID)
+	}
+	return nil
+}
+
+// isComposedOfCallWithID checks if a statement is a ComposedOf call with the given ID.
+func isComposedOfCallWithID(stmt ast.Stmt, composedOfID string) bool {
+	exprStmt, ok := stmt.(*ast.ExprStmt)
+	if !ok {
+		return false
+	}
+
+	call, ok := exprStmt.X.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+
+	// Check if it's a method call like a.ComposedOf(...)
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+
+	if sel.Sel.Name != "ComposedOf" {
+		return false
+	}
+
+	if len(call.Args) < 1 {
+		return false
+	}
+
+	// Check first argument (composed-of ID)
+	lit, ok := call.Args[0].(*ast.BasicLit)
+	if !ok || lit.Kind != token.STRING {
+		return false
+	}
+
+	val := strings.Trim(lit.Value, "\"")
+	return val == composedOfID
+}
+
+// --- Control helpers ---
+
+var pendingControl struct {
+	id      string
+	desc    string
+	pending bool
+}
+
+// addControlToAST adds a new AddControl call to the source.
+func addControlToAST(f *ast.File, controlID, desc string) error {
+	pendingControl.id = controlID
+	pendingControl.desc = desc
+	pendingControl.pending = true
+
+	log.Printf("📝 Adding Control: %s", controlID)
+	return nil
+}
+
+// deleteControlFromAST removes an AddControl call from the AST.
+func deleteControlFromAST(f *ast.File, controlID string) error {
+	found := false
+
+	// Controls are typically added via arch.AddControl("id", "desc")
+	// We need to find and remove such statements
+	ast.Inspect(f, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+
+		block, ok := n.(*ast.BlockStmt)
+		if !ok {
+			return true
+		}
+
+		newList := make([]ast.Stmt, 0, len(block.List))
+		for _, stmt := range block.List {
+			if isAddControlCallWithID(stmt, controlID) {
+				found = true
+				continue // Skip this statement to delete it
+			}
+			newList = append(newList, stmt)
+		}
+
+		if found {
+			block.List = newList
+		}
+
+		return true
+	})
+
+	if !found {
+		return fmt.Errorf("control %q not found", controlID)
+	}
+	return nil
+}
+
+// isAddControlCallWithID checks if a statement is an AddControl call with the given ID.
+func isAddControlCallWithID(stmt ast.Stmt, controlID string) bool {
+	exprStmt, ok := stmt.(*ast.ExprStmt)
+	if !ok {
+		return false
+	}
+
+	call, ok := exprStmt.X.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+
+	// Check if it's a method call like arch.AddControl(...)
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+
+	if sel.Sel.Name != "AddControl" {
+		return false
+	}
+
+	if len(call.Args) < 1 {
+		return false
+	}
+
+	// Check first argument (control ID)
+	lit, ok := call.Args[0].(*ast.BasicLit)
+	if !ok || lit.Kind != token.STRING {
+		return false
+	}
+
+	val := strings.Trim(lit.Value, "\"")
+	return val == controlID
+}
+
+// insertControlIntoSource inserts an AddControl call into the Go source code.
+func insertControlIntoSource(src, controlID, desc string) string {
+	controlCode := fmt.Sprintf(`
+	// GUI-generated control: %s
+	arch.AddControl("%s", "%s")
+`, controlID, controlID, desc)
+
+	// Find "return lc" and insert before it
+	pattern := "\treturn lc\n"
+	insertPoint := strings.LastIndex(src, pattern)
+	if insertPoint == -1 {
+		pattern = "return lc"
+		insertPoint = strings.LastIndex(src, pattern)
+	}
+
+	if insertPoint == -1 {
+		log.Printf("Warning: Could not find insertion point for Control")
+		return src
+	}
+
+	return src[:insertPoint] + controlCode + src[insertPoint:]
 }

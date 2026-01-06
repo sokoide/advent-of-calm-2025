@@ -18,7 +18,9 @@ import { useD2Viewer } from './hooks/useD2Viewer';
 
 import FlowsList from './components/FlowsList';
 import FlowEditor from './components/FlowEditor';
-import type { CalmFlow } from './domain/calm';
+import ComposedOfEditor from './components/ComposedOfEditor';
+import ControlsEditor from './components/ControlsEditor';
+import type { CalmFlow, CalmControl, CalmRelationship } from './domain/calm';
 
 function App() {
   const [studio, setStudio] = useState<StudioUseCase | null>(null);
@@ -34,6 +36,16 @@ function App() {
   const [flows, setFlows] = useState<CalmFlow[]>([]);
   const [showFlowEditor, setShowFlowEditor] = useState(false);
   const [editingFlow, setEditingFlow] = useState<CalmFlow | null>(null);
+
+  // ComposedOf state
+  const [showComposedOfEditor, setShowComposedOfEditor] = useState(false);
+
+  // Controls state
+  const [showControlsEditor, setShowControlsEditor] = useState(false);
+  const [controls, setControls] = useState<Record<string, CalmControl>>({});
+
+  // Relationships from JSON for ComposedOf
+  const [jsonRelationships, setJsonRelationships] = useState<CalmRelationship[]>([]);
 
   const { zoom: d2Zoom, pan: d2Pan, isPanning, zoomIn, zoomOut, reset, startPanning, stopPanning, movePan } = useD2Viewer();
 
@@ -77,7 +89,7 @@ function App() {
     saveLayout,
   } = useStudioContent(studio);
 
-  // Parse Flows when JSON updates
+  // Parse Flows and Controls when JSON updates
   useEffect(() => {
     if (jsonCode) {
       try {
@@ -86,6 +98,16 @@ function App() {
           setFlows(arch.flows);
         } else {
           setFlows([]);
+        }
+        if (arch.controls) {
+          setControls(arch.controls);
+        } else {
+          setControls({});
+        }
+        if (arch.relationships) {
+          setJsonRelationships(arch.relationships);
+        } else {
+          setJsonRelationships([]);
         }
       } catch (e) {
         // ignore incomplete json
@@ -321,6 +343,73 @@ function App() {
           }}
         />
       )}
+      {showComposedOfEditor && (
+        <ComposedOfEditor
+          nodes={nodes}
+          relationships={jsonRelationships}
+          onSave={async (containerId, childNodeIds) => {
+            if (studio) {
+              try {
+                await studio.patchAST([{
+                  type: 'add-composed-of',
+                  containerId,
+                  childNodeIds,
+                }]);
+                setTimeout(() => fetchData(true), 500);
+              } catch (err) {
+                console.error('Failed to add composed-of:', err);
+              }
+            }
+          }}
+          onDelete={async (composedOfId) => {
+            if (studio) {
+              try {
+                await studio.patchAST([{
+                  type: 'delete-composed-of',
+                  composedOfId,
+                }]);
+                setTimeout(() => fetchData(true), 500);
+              } catch (err) {
+                console.error('Failed to delete composed-of:', err);
+              }
+            }
+          }}
+          onClose={() => setShowComposedOfEditor(false)}
+        />
+      )}
+      {showControlsEditor && (
+        <ControlsEditor
+          controls={controls}
+          onAddControl={async (controlId, controlDesc) => {
+            if (studio) {
+              try {
+                await studio.patchAST([{
+                  type: 'add-control',
+                  controlId,
+                  controlDesc,
+                }]);
+                setTimeout(() => fetchData(true), 500);
+              } catch (err) {
+                console.error('Failed to add control:', err);
+              }
+            }
+          }}
+          onDeleteControl={async (controlId) => {
+            if (studio) {
+              try {
+                await studio.patchAST([{
+                  type: 'delete-control',
+                  controlId,
+                }]);
+                setTimeout(() => fetchData(true), 500);
+              } catch (err) {
+                console.error('Failed to delete control:', err);
+              }
+            }
+          }}
+          onClose={() => setShowControlsEditor(false)}
+        />
+      )}
     </>
   );
 
@@ -383,6 +472,18 @@ function App() {
               }`}
           >
             <Route size={16} /> Flows
+          </button>
+          <button
+            onClick={() => setShowComposedOfEditor(true)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all"
+          >
+            + ComposedOf
+          </button>
+          <button
+            onClick={() => setShowControlsEditor(true)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all"
+          >
+            ⛨ Controls
           </button>
         </div>
         <div className="flex items-center gap-3">

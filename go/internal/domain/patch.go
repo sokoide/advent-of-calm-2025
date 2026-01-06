@@ -14,24 +14,34 @@ const (
 	PatchAddFlow            PatchType = "add-flow"
 	PatchUpdateFlow         PatchType = "update-flow"
 	PatchDeleteFlow         PatchType = "delete-flow"
+	PatchAddComposedOf      PatchType = "add-composed-of"
+	PatchDeleteComposedOf   PatchType = "delete-composed-of"
+	PatchAddControl         PatchType = "add-control"
+	PatchUpdateControl      PatchType = "update-control"
+	PatchDeleteControl      PatchType = "delete-control"
 )
 
 // PatchOperation represents a single change to the source code.
 type PatchOperation struct {
-	Type        PatchType    `json:"type"`
-	NodeID      string       `json:"nodeId,omitempty"`
-	Origin      *PatchOrigin `json:"origin,omitempty"`
-	Property    string       `json:"property,omitempty"`    // For update-node
-	Value       interface{}  `json:"value,omitempty"`       // For update-node or update-count
-	SourceNode  string       `json:"sourceNode,omitempty"`  // For add-relationship
-	TargetNode  string       `json:"targetNode,omitempty"`  // For add-relationship
-	IsInteracts bool         `json:"isInteracts,omitempty"` // For add-relationship: use Interacts() instead of Connect()
-	InterfaceID string       `json:"interfaceId,omitempty"` // For add/delete-interface
-	Protocol    string       `json:"protocol,omitempty"`    // For add-interface
-	FlowID      string       `json:"flowId,omitempty"`      // For delete-flow, update-flow
-	FlowName    string       `json:"flowName,omitempty"`    // For add-flow, update-flow
-	FlowDesc    string       `json:"flowDesc,omitempty"`    // For add-flow, update-flow
-	FlowSteps   []string     `json:"flowSteps,omitempty"`   // For add-flow, update-flow (list of relationship IDs)
+	Type         PatchType    `json:"type"`
+	NodeID       string       `json:"nodeId,omitempty"`
+	Origin       *PatchOrigin `json:"origin,omitempty"`
+	Property     string       `json:"property,omitempty"`     // For update-node
+	Value        interface{}  `json:"value,omitempty"`        // For update-node or update-count
+	SourceNode   string       `json:"sourceNode,omitempty"`   // For add-relationship
+	TargetNode   string       `json:"targetNode,omitempty"`   // For add-relationship
+	IsInteracts  bool         `json:"isInteracts,omitempty"`  // For add-relationship: use Interacts() instead of Connect()
+	InterfaceID  string       `json:"interfaceId,omitempty"`  // For add/delete-interface
+	Protocol     string       `json:"protocol,omitempty"`     // For add-interface
+	FlowID       string       `json:"flowId,omitempty"`       // For delete-flow, update-flow
+	FlowName     string       `json:"flowName,omitempty"`     // For add-flow, update-flow
+	FlowDesc     string       `json:"flowDesc,omitempty"`     // For add-flow, update-flow
+	FlowSteps    []string     `json:"flowSteps,omitempty"`    // For add-flow, update-flow (list of relationship IDs)
+	ContainerID  string       `json:"containerId,omitempty"`  // For add-composed-of
+	ChildNodeIDs []string     `json:"childNodeIds,omitempty"` // For add-composed-of
+	ComposedOfID string       `json:"composedOfId,omitempty"` // For delete-composed-of
+	ControlID    string       `json:"controlId,omitempty"`    // For add/update/delete-control
+	ControlDesc  string       `json:"controlDesc,omitempty"`  // For add/update-control
 }
 
 // PatchOrigin carries the necessary info to locate the code.
