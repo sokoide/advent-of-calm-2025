@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { addEdge, type Node, type Edge, type Connection } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { Monitor, RefreshCw, CheckCircle2, Save } from 'lucide-react';
+import { Monitor, RefreshCw, CheckCircle2, Save, Route } from 'lucide-react';
 import * as Resizable from 'react-resizable-panels';
 
 import { getLayoutedElements } from './utils/layout';
@@ -16,6 +16,9 @@ import { useStudioContent } from './hooks/useStudioContent';
 import { useNodeOperations } from './hooks/useNodeOperations';
 import { useD2Viewer } from './hooks/useD2Viewer';
 
+import FlowsList from './components/FlowsList';
+import type { CalmFlow } from './domain/calm';
+
 function App() {
   const [studio, setStudio] = useState<StudioUseCase | null>(null);
   const [useLocalAgent, setUseLocalAgent] = useState(false);
@@ -24,6 +27,8 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabType>('merged');
   const [showDiff, setShowDiff] = useState(false);
   const [previewCode, setPreviewCode] = useState('');
+  const [showFlows, setShowFlows] = useState(false);
+  const [flows, setFlows] = useState<CalmFlow[]>([]);
 
   const { zoom: d2Zoom, pan: d2Pan, isPanning, zoomIn, zoomOut, reset, startPanning, stopPanning, movePan } = useD2Viewer();
 
@@ -67,6 +72,22 @@ function App() {
     saveLayout,
   } = useStudioContent(studio);
 
+  // Parse Flows when JSON updates
+  useEffect(() => {
+    if (jsonCode) {
+      try {
+        const arch = JSON.parse(jsonCode);
+        if (arch.flows) {
+          setFlows(arch.flows);
+        } else {
+          setFlows([]);
+        }
+      } catch (e) {
+        // ignore incomplete json
+      }
+    }
+  }, [jsonCode]);
+
   const { onAddNode, onUpdateNode, onDeleteNode, onNodeDragStop } = useNodeOperations({
     studio,
     nodes,
@@ -100,6 +121,22 @@ function App() {
       fetchSVG();
     }
   }, [activeTab, fetchSVG]);
+
+  const handleDeleteFlow = async (flowId: string) => {
+    if (studio) {
+      try {
+        await studio.patchAST([
+          {
+            type: 'delete-flow',
+            flowId,
+          },
+        ]);
+        setTimeout(() => fetchData(true), 500);
+      } catch (err) {
+        console.error('Failed to delete flow:', err);
+      }
+    }
+  };
 
   const onResetLayout = useCallback(() => {
     const layouted = getLayoutedElements(nodes, edges, 'TB');
@@ -204,29 +241,38 @@ function App() {
   );
 
   const renderDiagram = () => (
-    <DiagramView
-      nodes={nodes}
-      edges={edges}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      onConnect={onConnect}
-      onNodeDragStop={onNodeDragStop}
-      onNodeClick={(_, node) => {
-        setSelectedNode(node);
-        setSelectedEdge(null);
-      }}
-      onEdgeClick={(_, edge) => {
-        setSelectedEdge(edge);
-        setSelectedNode(null);
-      }}
-      onPaneClick={() => {
-        setSelectedNode(null);
-        setSelectedEdge(null);
-      }}
-      onAddNode={onAddNode}
-      onResetLayout={onResetLayout}
-      onDeleteEdge={onDeleteEdge}
-    />
+    <>
+      <DiagramView
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onNodeDragStop={onNodeDragStop}
+        onNodeClick={(_, node) => {
+          setSelectedNode(node);
+          setSelectedEdge(null);
+        }}
+        onEdgeClick={(_, edge) => {
+          setSelectedEdge(edge);
+          setSelectedNode(null);
+        }}
+        onPaneClick={() => {
+          setSelectedNode(null);
+          setSelectedEdge(null);
+        }}
+        onAddNode={onAddNode}
+        onResetLayout={onResetLayout}
+        onDeleteEdge={onDeleteEdge}
+      />
+      {showFlows && (
+        <FlowsList
+          flows={flows}
+          onDeleteFlow={handleDeleteFlow}
+          onClose={() => setShowFlows(false)}
+        />
+      )}
+    </>
   );
 
   const handleAddInterface = async (nodeId: string, interfaceId: string, protocol: string) => {
@@ -281,6 +327,14 @@ function App() {
             <Monitor size={20} /> CALM Studio
           </h1>
           <TabNav activeTab={activeTab} onTabChange={setActiveTab} />
+          <div className="h-6 w-[1px] bg-slate-800 mx-1" />
+          <button
+            onClick={() => setShowFlows(!showFlows)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${showFlows ? 'bg-blue-900/50 text-blue-200 border border-blue-800' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+          >
+            <Route size={16} /> Flows
+          </button>
         </div>
         <div className="flex items-center gap-3">
           <button

@@ -25,7 +25,7 @@ export interface PatchOrigin {
 }
 
 export interface PatchOperation {
-  type: 'update-node' | 'delete-node' | 'update-count' | 'delete-relationship' | 'add-relationship' | 'add-interface' | 'delete-interface';
+  type: 'update-node' | 'delete-node' | 'update-count' | 'delete-relationship' | 'add-relationship' | 'add-interface' | 'delete-interface' | 'delete-flow';
   nodeId?: string;
   origin?: PatchOrigin;
   property?: string;
@@ -35,6 +35,7 @@ export interface PatchOperation {
   isInteracts?: boolean;
   interfaceId?: string; // For add/delete interface
   protocol?: string;    // For add interface
+  flowId?: string;      // For delete-flow
 }
 
 export interface StudioAPI {

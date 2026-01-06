@@ -60,6 +60,8 @@ export interface CalmRelationship {
 export interface CalmFlow {
   "unique-id": string;
   name: string;
+  description: string;
+  metadata?: Record<string, any>;
   transitions: CalmTransition[];
 }
 

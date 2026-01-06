@@ -80,6 +80,15 @@ func (GoASTSyncer) ApplyPatch(src string, ops []domain.PatchOperation) (string, 
 			if err := deleteInterfaceFromAST(f, op.InterfaceID); err != nil {
 				return "", fmt.Errorf("failed to delete interface %s: %w", op.InterfaceID, err)
 			}
+		case domain.PatchDeleteFlow:
+			// Delete DefineFlow() call
+			if op.FlowID == "" {
+				log.Printf("Warning: delete-flow requires flowId")
+				continue
+			}
+			if err := deleteFlowFromAST(f, op.FlowID); err != nil {
+				return "", fmt.Errorf("failed to delete flow %s: %w", op.FlowID, err)
+			}
 		}
 	}
 
@@ -640,6 +649,76 @@ func isInterfaceCallWithID(stmt ast.Stmt, interfaceID string) bool {
 					if lit, ok := call.Args[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {
 						val := strings.Trim(lit.Value, "\"")
 						if val == interfaceID {
+							return true
+						}
+					}
+				}
+			}
+			// Move down to the receiver
+			curr = sel.X
+		} else {
+			return false
+		}
+	}
+}
+
+// deleteFlowFromAST finds a DefineFlow("id", ...) call and removes it.
+func deleteFlowFromAST(f *ast.File, flowID string) error {
+	found := false
+
+	ast.Inspect(f, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+
+		block, ok := n.(*ast.BlockStmt)
+		if !ok {
+			return true
+		}
+
+		newOrderedList := make([]ast.Stmt, 0, len(block.List))
+		for _, stmt := range block.List {
+			if isDefineFlowCallWithID(stmt, flowID) {
+				found = true
+				continue // Delete
+			}
+			newOrderedList = append(newOrderedList, stmt)
+		}
+
+		if found {
+			block.List = newOrderedList
+			return false
+		}
+		return true
+	})
+
+	if !found {
+		return fmt.Errorf("flow definition %q not found", flowID)
+	}
+	return nil
+}
+
+func isDefineFlowCallWithID(stmt ast.Stmt, flowID string) bool {
+	exprStmt, ok := stmt.(*ast.ExprStmt)
+	if !ok {
+		return false
+	}
+
+	// Traverse down the call chain to find the root DefineFlow() call
+	// Example: a.DefineFlow("id", ...).Steps(...)
+	curr := exprStmt.X
+	for {
+		call, ok := curr.(*ast.CallExpr)
+		if !ok {
+			return false
+		}
+
+		if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
+			if sel.Sel.Name == "DefineFlow" {
+				if len(call.Args) >= 1 {
+					if lit, ok := call.Args[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+						val := strings.Trim(lit.Value, "\"")
+						if val == flowID {
 							return true
 						}
 					}
