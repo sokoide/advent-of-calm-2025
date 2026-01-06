@@ -83,6 +83,18 @@ function App() {
     setSelectedNode(null);
   }, [activeTab]);
 
+  // Keep selectedNode in sync with the latest nodes data (e.g. after interface deletion)
+  useEffect(() => {
+    if (selectedNode) {
+      const freshNode = nodes.find((n) => n.id === selectedNode.id);
+      if (freshNode && freshNode !== selectedNode) {
+        setSelectedNode(freshNode);
+      } else if (!freshNode) {
+        setSelectedNode(null);
+      }
+    }
+  }, [nodes, selectedNode]);
+
   useEffect(() => {
     if (activeTab === 'd2-diagram') {
       fetchSVG();
@@ -216,6 +228,41 @@ function App() {
       onDeleteEdge={onDeleteEdge}
     />
   );
+
+  const handleAddInterface = async (nodeId: string, interfaceId: string, protocol: string) => {
+    if (studio) {
+      try {
+        await studio.patchAST([
+          {
+            type: 'add-interface',
+            nodeId,
+            interfaceId,
+            protocol,
+          },
+        ]);
+        setTimeout(() => fetchData(true), 500);
+      } catch (err) {
+        console.error('Failed to add interface:', err);
+      }
+    }
+  };
+
+  const handleDeleteInterface = async (nodeId: string, interfaceId: string) => {
+    if (studio) {
+      try {
+        await studio.patchAST([
+          {
+            type: 'delete-interface',
+            nodeId,
+            interfaceId,
+          },
+        ]);
+        setTimeout(() => fetchData(true), 500);
+      } catch (err) {
+        console.error('Failed to delete interface:', err);
+      }
+    }
+  };
 
   if (loading || !studio) {
     return (
@@ -373,6 +420,8 @@ function App() {
           onUpdate={onUpdateNode}
           onDelete={onDeleteNode}
           onClose={() => setSelectedNode(null)}
+          onAddInterface={handleAddInterface}
+          onDeleteInterface={handleDeleteInterface}
         />
 
         <EdgeSidebar

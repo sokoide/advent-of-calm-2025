@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { type Node } from 'reactflow';
-import { X, Trash2, Save, AlertCircle, Code } from 'lucide-react';
+import { X, Trash2, Save, AlertCircle, Code, Plus, Trash } from 'lucide-react';
 import type { CalmNode } from '../domain/calm';
 
 interface SidebarProps {
@@ -8,9 +8,11 @@ interface SidebarProps {
   onUpdate: (id: string, data: Partial<CalmNode>) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
+  onAddInterface?: (nodeId: string, interfaceId: string, protocol: string) => void;
+  onDeleteInterface?: (nodeId: string, interfaceId: string) => void;
 }
 
-const Sidebar = ({ selectedNode, onUpdate, onDelete, onClose }: SidebarProps) => {
+const Sidebar = ({ selectedNode, onUpdate, onDelete, onClose, onAddInterface, onDeleteInterface }: SidebarProps) => {
   const [formData, setFormData] = useState<Partial<CalmNode>>({});
 
   useEffect(() => {
@@ -182,6 +184,66 @@ const Sidebar = ({ selectedNode, onUpdate, onDelete, onClose }: SidebarProps) =>
             onChange={handleChange}
             disabled={!isEditable}
           />
+        </div>
+
+        {/* Interfaces Section */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Interfaces</label>
+            {isEditable && onAddInterface && (
+              <button
+                type="button"
+                onClick={() => {
+                  const id = prompt('Enter Interface ID (e.g., http-api):');
+                  if (id && id.trim()) {
+                    const protocol = prompt('Enter Protocol (HTTP, gRPC, etc.):', 'HTTP');
+                    if (protocol && protocol.trim()) {
+                      onAddInterface(selectedNode.id, id.trim(), protocol.trim());
+                    }
+                  }
+                }}
+                className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+              >
+                <Plus size={12} /> Add
+              </button>
+            )}
+          </div>
+          {formData.interfaces && formData.interfaces.length > 0 ? (
+            <div className="space-y-2">
+              {formData.interfaces.map((iface: any) => (
+                <div key={iface['unique-id']} className="bg-slate-800/50 border border-slate-700 rounded p-2 flex items-center justify-between group">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono text-blue-300">{iface['unique-id']}</span>
+                      <span className="text-[10px] bg-slate-700 px-1.5 py-0.5 rounded text-slate-400">{iface.protocol}</span>
+                    </div>
+                    {(iface.port || iface.name) && (
+                      <div className="text-[10px] text-slate-500 mt-0.5">
+                        {iface.port && <span className="mr-2">:{iface.port}</span>}
+                        {iface.name && <span>{iface.name}</span>}
+                      </div>
+                    )}
+                  </div>
+                  {isEditable && onDeleteInterface && (
+                    <button
+                      onClick={() => {
+                        if (confirm(`Delete interface ${iface['unique-id']}?`)) {
+                          onDeleteInterface(selectedNode.id, iface['unique-id']);
+                        }
+                      }}
+                      className="text-slate-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash size={12} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs text-slate-600 italic border border-dashed border-slate-800 rounded p-2 text-center">
+              No interfaces defined
+            </div>
+          )}
         </div>
 
         {/* Metadata Section */}

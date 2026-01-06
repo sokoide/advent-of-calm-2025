@@ -9,6 +9,8 @@ const (
 	PatchUpdateCount        PatchType = "update-count" // For loop variables
 	PatchDeleteRelationship PatchType = "delete-relationship"
 	PatchAddRelationship    PatchType = "add-relationship"
+	PatchAddInterface       PatchType = "add-interface"
+	PatchDeleteInterface    PatchType = "delete-interface"
 )
 
 // PatchOperation represents a single change to the source code.
@@ -21,6 +23,8 @@ type PatchOperation struct {
 	SourceNode  string       `json:"sourceNode,omitempty"`  // For add-relationship
 	TargetNode  string       `json:"targetNode,omitempty"`  // For add-relationship
 	IsInteracts bool         `json:"isInteracts,omitempty"` // For add-relationship: use Interacts() instead of Connect()
+	InterfaceID string       `json:"interfaceId,omitempty"` // For add/delete-interface
+	Protocol    string       `json:"protocol,omitempty"`    // For add-interface
 }
 
 // PatchOrigin carries the necessary info to locate the code.

@@ -62,6 +62,24 @@ func (GoASTSyncer) ApplyPatch(src string, ops []domain.PatchOperation) (string, 
 			if err := addRelationshipToAST(f, fset, op.NodeID, op.SourceNode, op.TargetNode, op.IsInteracts); err != nil {
 				return "", fmt.Errorf("failed to add relationship %s: %w", op.NodeID, err)
 			}
+		case domain.PatchAddInterface:
+			// Add a new Interface() call for a node
+			if op.NodeID == "" || op.InterfaceID == "" || op.Protocol == "" {
+				log.Printf("Warning: add-interface requires nodeId, interfaceId, and protocol")
+				continue
+			}
+			if err := addInterfaceToAST(f, fset, op.NodeID, op.InterfaceID, op.Protocol); err != nil {
+				return "", fmt.Errorf("failed to add interface %s to %s: %w", op.InterfaceID, op.NodeID, err)
+			}
+		case domain.PatchDeleteInterface:
+			// Delete Interface() call
+			if op.InterfaceID == "" {
+				log.Printf("Warning: delete-interface requires interfaceId")
+				continue
+			}
+			if err := deleteInterfaceFromAST(f, op.InterfaceID); err != nil {
+				return "", fmt.Errorf("failed to delete interface %s: %w", op.InterfaceID, err)
+			}
 		}
 	}
 
@@ -464,4 +482,173 @@ func updateLoopVariable(f *ast.File, varName string, delta int) error {
 		return fmt.Errorf("variable/constant %q not found or not an integer literal", varName)
 	}
 	return nil
+}
+
+// addInterfaceToAST finds the DefineNode call for the given nodeID and adds an Interface() call after it.
+func addInterfaceToAST(f *ast.File, fset *token.FileSet, nodeID, interfaceID, protocol string) error {
+	found := false
+
+	ast.Inspect(f, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+
+		block, ok := n.(*ast.BlockStmt)
+		if !ok {
+			return true
+		}
+
+		// Look for the assignment statement containing DefineNode with matching ID
+		var insertIndex int = -1
+		var varName string
+
+		for i, stmt := range block.List {
+			// Check for assignment: varName := a.DefineNode("nodeID", ...) or varName = ...
+			// 1. Short Variable Declaration: varName := ...
+			if assign, ok := stmt.(*ast.AssignStmt); ok {
+				for j, expr := range assign.Rhs {
+					if isDefineNodeCallWithID(expr, nodeID) {
+						// Found it! Get LHS name
+						if ident, ok := assign.Lhs[j].(*ast.Ident); ok {
+							varName = ident.Name
+							insertIndex = i + 1
+							break
+						}
+					}
+				}
+			}
+			if insertIndex != -1 {
+				break
+			}
+		}
+
+		if insertIndex != -1 && varName != "" {
+			// Create the new statement: varName.Interface("id", "proto")
+			// We can't easily construct a full AST manually with positions, so we construct a call expression
+			// and rely on go/printer or formatFile to handle it.
+
+			// Construct: varName.Interface
+			fun := &ast.SelectorExpr{
+				X:   &ast.Ident{Name: varName},
+				Sel: &ast.Ident{Name: "Interface"},
+			}
+
+			// Args: "id", "proto"
+			args := []ast.Expr{
+				&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", interfaceID)},
+				&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", protocol)},
+			}
+
+			call := &ast.CallExpr{Fun: fun, Args: args}
+			stmt := &ast.ExprStmt{X: call}
+
+			// Insert into block
+			newOrderedList := append([]ast.Stmt{}, block.List[:insertIndex]...)
+			newOrderedList = append(newOrderedList, stmt)
+			newOrderedList = append(newOrderedList, block.List[insertIndex:]...)
+			block.List = newOrderedList
+
+			found = true
+			return false
+		}
+
+		return true
+	})
+
+	if !found {
+		return fmt.Errorf("definition for node %s not found (must be explicit variable assignment)", nodeID)
+	}
+	return nil
+}
+
+// isDefineNodeCallWithID checks if expr is a DefineNode call for the specific nodeID
+func isDefineNodeCallWithID(expr ast.Expr, nodeID string) bool {
+	call, ok := expr.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	if !isDefineNode(call) {
+		return false
+	}
+	if len(call.Args) < 1 {
+		return false
+	}
+	// Check first arg (ID)
+	lit, ok := call.Args[0].(*ast.BasicLit)
+	if !ok || lit.Kind != token.STRING {
+		return false
+	}
+	val := strings.Trim(lit.Value, "\"")
+	return val == nodeID
+}
+
+// deleteInterfaceFromAST finds an Interface("id", ...) call and removes it.
+func deleteInterfaceFromAST(f *ast.File, interfaceID string) error {
+	found := false
+
+	ast.Inspect(f, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+
+		block, ok := n.(*ast.BlockStmt)
+		if !ok {
+			return true
+		}
+
+		newOrderedList := make([]ast.Stmt, 0, len(block.List))
+		for _, stmt := range block.List {
+			if isInterfaceCallWithID(stmt, interfaceID) {
+				found = true
+				continue // Delete
+			}
+			newOrderedList = append(newOrderedList, stmt)
+		}
+
+		if found {
+			block.List = newOrderedList
+			return false
+		}
+		return true
+	})
+
+	if !found {
+		return fmt.Errorf("interface call %q not found", interfaceID)
+	}
+	return nil
+}
+
+func isInterfaceCallWithID(stmt ast.Stmt, interfaceID string) bool {
+	exprStmt, ok := stmt.(*ast.ExprStmt)
+	if !ok {
+		return false
+	}
+
+	// Traverse down the call chain to find the root Interface() call
+	// Example: node.Interface("id").SetName("name")
+	// AST: Call(SetName) -> X: Call(Interface) -> X: node
+	curr := exprStmt.X
+	for {
+		call, ok := curr.(*ast.CallExpr)
+		if !ok {
+			return false
+		}
+
+		if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
+			if sel.Sel.Name == "Interface" {
+				if len(call.Args) >= 1 {
+					if lit, ok := call.Args[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+						val := strings.Trim(lit.Value, "\"")
+						if val == interfaceID {
+							return true
+						}
+					}
+				}
+			}
+			// Move down to the receiver
+			curr = sel.X
+		} else {
+			return false
+		}
+	}
 }
