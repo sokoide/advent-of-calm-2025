@@ -59,7 +59,6 @@ func main() {
 	http.HandleFunc("/content", withCORS(srv.handleContent))
 	http.HandleFunc("/svg", withCORS(srv.handleSVG))
 	http.HandleFunc("/update", withCORS(srv.handleUpdate))
-	http.HandleFunc("/sync-ast", withCORS(srv.handleASTSync))
 	http.HandleFunc("/patch", withCORS(srv.handlePatch))
 	http.HandleFunc("/preview-json-sync", withCORS(srv.handlePreviewJSONSync))
 	http.HandleFunc("/layout", withCORS(srv.handleLayout))
@@ -273,57 +272,6 @@ func (s *server) handlePreviewJSONSync(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"newCode": newCode})
-}
-
-func (s *server) handleASTSync(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req struct {
-		Action   string `json:"action"`
-		NodeID   string `json:"nodeId"`
-		NodeType string `json:"nodeType,omitempty"`
-		Name     string `json:"name,omitempty"`
-		Desc     string `json:"desc,omitempty"`
-		Property string `json:"property,omitempty"`
-		Value    string `json:"value,omitempty"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	log.Printf("POST /sync-ast action=%s node=%s from %s", req.Action, req.NodeID, r.RemoteAddr)
-	mainPath := filepath.Join(s.goDir, dslRelativePath)
-	src, err := os.ReadFile(mainPath)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	newCode, err := s.studioSvc.ApplyNodeAction(string(src), usecase.NodeAction{
-		Action:   req.Action,
-		NodeID:   req.NodeID,
-		NodeType: req.NodeType,
-		Name:     req.Name,
-		Desc:     req.Desc,
-		Property: req.Property,
-		Value:    req.Value,
-	})
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if err := os.WriteFile(mainPath, []byte(newCode), 0644); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
 }
 
 func (s *server) handleLayout(w http.ResponseWriter, r *http.Request) {

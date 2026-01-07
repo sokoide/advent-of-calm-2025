@@ -134,7 +134,6 @@ func UpdateNodeNameInAST(f *ast.File, nodeID, newName string) error {
 
 // AddNodeInAST appends a new DefineNode call to the build or defineNodes function in the AST.
 func AddNodeInAST(f *ast.File, nodeID, nodeType, name, desc string) error {
-	typeExpr := findDefineNodeTypeExpr(f)
 	for _, decl := range f.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok {
@@ -158,10 +157,14 @@ func AddNodeInAST(f *ast.File, nodeID, nodeType, name, desc string) error {
 			}
 		}
 
-		// Create: <receiver>.DefineNode("id", <Type>, "name", "desc")
-		if typeExpr == nil {
-			typeExpr = defaultNodeTypeExpr(nodeType)
+		// Create type expression from nodeType parameter
+		// Use domain.Service, domain.Database, etc.
+		typeExpr := &ast.SelectorExpr{
+			X:   ast.NewIdent("domain"),
+			Sel: ast.NewIdent(nodeType),
 		}
+
+		// Create: <receiver>.DefineNode("id", <Type>, "name", "desc")
 		newStmt := &ast.ExprStmt{
 			X: &ast.CallExpr{
 				Fun: &ast.SelectorExpr{
@@ -170,7 +173,7 @@ func AddNodeInAST(f *ast.File, nodeID, nodeType, name, desc string) error {
 				},
 				Args: []ast.Expr{
 					&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", nodeID)},
-					cloneTypeExpr(typeExpr),
+					typeExpr,
 					&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", name)},
 					&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", desc)},
 				},
@@ -257,6 +260,7 @@ func UpdateNodePropertyInAST(f *ast.File, nodeID, property, value string) error 
 			}
 		case "owner":
 			// owner is usually in WithOwner("owner", "cc") option
+			updatedOwner := false
 			for _, arg := range call.Args[4:] {
 				optCall, ok := arg.(*ast.CallExpr)
 				if !ok {
@@ -264,8 +268,24 @@ func UpdateNodePropertyInAST(f *ast.File, nodeID, property, value string) error 
 				}
 				if isWithOwnerCall(optCall.Fun) && len(optCall.Args) >= 1 {
 					optCall.Args[0] = &ast.BasicLit{Kind: idLit.Kind, Value: fmt.Sprintf("%q", value)}
+					updatedOwner = true
 					found = true
 				}
+			}
+			if !updatedOwner {
+				// Append new WithOwner option: domain.WithOwner("value", "TBD")
+				newOption := &ast.CallExpr{
+					Fun: &ast.SelectorExpr{
+						X:   ast.NewIdent("domain"),
+						Sel: ast.NewIdent("WithOwner"),
+					},
+					Args: []ast.Expr{
+						&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", value)},
+						&ast.BasicLit{Kind: token.STRING, Value: "\"TBD\""},
+					},
+				}
+				call.Args = append(call.Args, newOption)
+				found = true
 			}
 		}
 

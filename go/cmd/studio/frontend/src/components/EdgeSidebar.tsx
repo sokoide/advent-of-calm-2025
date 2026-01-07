@@ -1,17 +1,45 @@
-import { X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Save, Trash2 } from 'lucide-react';
 import type { Edge } from 'reactflow';
 
 interface EdgeSidebarProps {
     selectedEdge: Edge | null;
     onClose: () => void;
+    onUpdate?: (id: string, property: string, value: string) => void;
+    onDelete?: (id: string) => void;
 }
 
-const EdgeSidebar = ({ selectedEdge, onClose }: EdgeSidebarProps) => {
+const EdgeSidebar = ({ selectedEdge, onClose, onUpdate, onDelete }: EdgeSidebarProps) => {
+    const [description, setDescription] = useState('');
+    const [protocol, setProtocol] = useState('');
+
+    useEffect(() => {
+        if (selectedEdge) {
+            const calm = selectedEdge.data?.calm || {};
+            setDescription(calm.description || '');
+            const relType = calm['relationship-type'];
+            setProtocol(relType?.connects?.protocol || '');
+        }
+    }, [selectedEdge]);
+
     if (!selectedEdge) return null;
 
     // Extract calm relationship data from edge
     const calm = selectedEdge.data?.calm || {};
     const relationshipType = calm['relationship-type'];
+
+    const handleSave = () => {
+        if (!selectedEdge || !onUpdate) return;
+
+        if (description !== calm.description) {
+            onUpdate(selectedEdge.id, 'description', description);
+        }
+
+        const currentProtocol = relationshipType?.connects?.protocol || '';
+        if (protocol !== currentProtocol) {
+            onUpdate(selectedEdge.id, 'protocol', protocol);
+        }
+    };
 
     return (
         <div className="absolute right-0 top-0 h-full w-80 bg-zinc-900/95 border-l border-zinc-700 backdrop-blur-md shadow-2xl z-50 flex flex-col">
@@ -63,16 +91,17 @@ const EdgeSidebar = ({ selectedEdge, onClose }: EdgeSidebarProps) => {
                 </div>
 
                 {/* Description */}
-                {calm.description && (
-                    <div className="space-y-1">
-                        <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">
-                            Description
-                        </label>
-                        <div className="px-3 py-2 rounded-lg bg-zinc-800/50 border border-zinc-700/50 text-zinc-300 text-sm">
-                            {calm.description}
-                        </div>
-                    </div>
-                )}
+                <div className="space-y-1">
+                    <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">
+                        Description
+                    </label>
+                    <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm focus:outline-none focus:border-purple-500 h-20 resize-none"
+                        placeholder="Enter description..."
+                    />
+                </div>
 
                 {/* Relationship Type */}
                 {relationshipType && (
@@ -115,12 +144,16 @@ const EdgeSidebar = ({ selectedEdge, onClose }: EdgeSidebarProps) => {
                             Connection Details
                         </label>
                         <div className="space-y-1.5 text-xs">
-                            {relationshipType.connects.protocol && (
-                                <div className="flex justify-between px-3 py-1.5 bg-zinc-800/30 rounded">
-                                    <span className="text-zinc-400">Protocol</span>
-                                    <span className="text-zinc-200">{relationshipType.connects.protocol}</span>
-                                </div>
-                            )}
+                            <div className="flex flex-col gap-1.5 px-3 py-2 bg-zinc-800/30 rounded border border-zinc-700/30">
+                                <span className="text-zinc-400">Protocol</span>
+                                <input
+                                    type="text"
+                                    value={protocol}
+                                    onChange={(e) => setProtocol(e.target.value)}
+                                    className="bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-zinc-200 outline-none focus:border-purple-500"
+                                    placeholder="e.g. HTTPS, gRPC"
+                                />
+                            </div>
                             {relationshipType.connects['data-classification'] && (
                                 <div className="flex justify-between px-3 py-1.5 bg-zinc-800/30 rounded">
                                     <span className="text-zinc-400">Classification</span>
@@ -135,6 +168,29 @@ const EdgeSidebar = ({ selectedEdge, onClose }: EdgeSidebarProps) => {
                     </div>
                 )}
             </div>
+
+            {/* Actions */}
+            <div className="p-4 border-t border-zinc-700/50 bg-zinc-900/50 space-y-3">
+                <button
+                    onClick={handleSave}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-purple-600 text-white font-semibold hover:bg-purple-500 transition-all shadow-lg active:scale-[0.98]"
+                >
+                    <Save size={16} /> Save Changes
+                </button>
+                {onDelete && (
+                    <button
+                        onClick={() => {
+                            if (confirm('Delete this relationship?')) {
+                                onDelete(selectedEdge.id);
+                            }
+                        }}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-zinc-800 text-red-400 border border-zinc-700 hover:bg-red-950/30 hover:text-red-300 transition-all active:scale-[0.98]"
+                    >
+                        <Trash2 size={16} /> Delete Relationship
+                    </button>
+                )}
+            </div>
+
         </div>
     );
 };

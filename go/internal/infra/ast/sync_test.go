@@ -55,7 +55,7 @@ func BuildArchitecture() {
 
 func BuildArchitecture() {
 	arch.DefineNode("node1", Service, "Name 1", "desc")
-	arch.DefineNode("node2", Service, "Name 2", "desc")
+	arch.DefineNode("node2", domain.Service, "Name 2", "desc")
 }
 `
 

@@ -7,15 +7,6 @@ export interface ContentSnapshot {
   json: string;
 }
 
-export interface SyncASTRequest {
-  action: 'add' | 'update' | 'delete';
-  nodeId: string;
-  nodeType?: string;
-  name?: string;
-  desc?: string;
-  property?: string;
-  value?: string;
-}
 
 export interface PatchOrigin {
   file: string;
@@ -26,10 +17,12 @@ export interface PatchOrigin {
 
 export interface PatchOperation {
   type:
+  | 'add-node'
   | 'update-node'
   | 'delete-node'
   | 'update-count'
   | 'delete-relationship'
+  | 'update-relationship'
   | 'add-relationship'
   | 'add-interface'
   | 'delete-interface'
@@ -61,6 +54,9 @@ export interface PatchOperation {
   composedOfDesc?: string; // For update-composed-of
   controlId?: string; // For add/update/delete-control
   controlDesc?: string; // For add/update-control
+  nodeName?: string; // For add-node
+  nodeTypeName?: string; // For add-node (e.g., "Service", "Database")
+  nodeDesc?: string; // For add-node
 }
 
 export interface StudioAPI {
@@ -68,7 +64,6 @@ export interface StudioAPI {
   fetchSVG(): Promise<string>;
   fetchLayout(archId: string): Promise<LayoutData>;
   saveLayout(archId: string, layout: LayoutData): Promise<void>;
-  syncAST(request: SyncASTRequest): Promise<void>;
   patchAST(ops: PatchOperation[]): Promise<void>;
   updateGo(content: string): Promise<void>;
   previewJSONSync(json: string): Promise<{ newCode?: string; error?: string }>;

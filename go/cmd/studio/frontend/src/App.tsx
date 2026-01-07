@@ -115,10 +115,11 @@ function App() {
     }
   }, [jsonCode]);
 
-  const { onAddNode, onUpdateNode, onDeleteNode, onNodeDragStop } = useNodeOperations({
+  const { onAddNode, onUpdateNode, onDeleteNode, onNodeDragStop, onDuplicateNode } = useNodeOperations({
     studio,
     nodes,
     edges,
+    relationships: jsonRelationships,
     setNodes,
     setEdges,
     saveLayout,
@@ -639,6 +640,7 @@ function App() {
           relationships={jsonRelationships}
           onUpdate={onUpdateNode}
           onDelete={onDeleteNode}
+          onDuplicate={onDuplicateNode}
           onClose={() => setSelectedNode(null)}
           onAddInterface={handleAddInterface}
           onDeleteInterface={handleDeleteInterface}
@@ -683,6 +685,22 @@ function App() {
         <EdgeSidebar
           selectedEdge={selectedEdge}
           onClose={() => setSelectedEdge(null)}
+          onUpdate={async (id, property, value) => {
+            if (studio) {
+              try {
+                await studio.patchAST([{
+                  type: 'update-relationship',
+                  nodeId: id,
+                  property: property,
+                  value: value,
+                }]);
+                setTimeout(() => fetchData(true), 500);
+              } catch (err) {
+                console.error('Failed to update relationship:', err);
+              }
+            }
+          }}
+          onDelete={onDeleteEdge}
         />
 
         {showDiff && (

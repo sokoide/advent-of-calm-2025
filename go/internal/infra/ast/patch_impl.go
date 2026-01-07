@@ -20,19 +20,35 @@ func (GoASTSyncer) ApplyPatch(src string, ops []domain.PatchOperation) (string, 
 
 	for _, op := range ops {
 		switch op.Type {
-		case domain.PatchUpdateNode:
-			if op.Origin == nil {
-				log.Printf("Warning: update-node requires origin: %v", op)
+		case domain.PatchAddNode:
+			// Add a new DefineNode call
+			if op.NodeID == "" || op.NodeName == "" {
+				log.Printf("Warning: add-node requires nodeId and nodeName")
 				continue
 			}
-			if err := updateNodeAtLine(f, fset, op); err != nil {
-				return "", fmt.Errorf("failed to update node at line %d: %w", op.Origin.Line, err)
+			nodeType := op.NodeTypeName
+			if nodeType == "" {
+				nodeType = "Service"
+			}
+			if err := AddNodeInAST(f, op.NodeID, nodeType, op.NodeName, op.NodeDesc); err != nil {
+				return "", fmt.Errorf("failed to add node %s: %w", op.NodeID, err)
+			}
+		case domain.PatchUpdateNode:
+			if op.Origin != nil {
+				if err := updateNodeAtLine(f, fset, op); err != nil {
+					return "", fmt.Errorf("failed to update node at line %d: %w", op.Origin.Line, err)
+				}
+			} else if op.NodeID != "" {
+				// Fallback to nodeId lookup (legacy syncAST behavior)
+				valStr := fmt.Sprintf("%v", op.Value)
+				if err := UpdateNodePropertyInAST(f, op.NodeID, op.Property, valStr); err != nil {
+					return "", fmt.Errorf("failed to update node %s: %w", op.NodeID, err)
+				}
+			} else {
+				log.Printf("Warning: update-node requires origin or nodeId: %v", op)
+				continue
 			}
 		case domain.PatchDeleteNode:
-			if op.Origin == nil {
-				log.Printf("Warning: delete-node requires origin: %v", op)
-				continue
-			}
 			// IMPORTANT: Find variable name BEFORE deleting the node definition
 			var varName string
 			if op.NodeID != "" {
@@ -43,18 +59,29 @@ func (GoASTSyncer) ApplyPatch(src string, ops []domain.PatchOperation) (string, 
 					log.Printf("Cascade delete: no variable name found for nodeID '%s'", op.NodeID)
 				}
 			}
-			// Now delete the node
-			if op.Origin.LoopVar != "" {
-				// Loop node deletion = Decrement loop variable
-				if err := updateLoopVariable(f, op.Origin.LoopVar, -1); err != nil {
-					return "", fmt.Errorf("failed to decrement loop var %s: %w", op.Origin.LoopVar, err)
+
+			if op.Origin != nil {
+				if op.Origin.LoopVar != "" {
+					// Loop node deletion = Decrement loop variable
+					if err := updateLoopVariable(f, op.Origin.LoopVar, -1); err != nil {
+						return "", fmt.Errorf("failed to decrement loop var %s: %w", op.Origin.LoopVar, err)
+					}
+				} else {
+					// Explicit node deletion = Remove statement
+					if err := deleteNodeAtLine(f, fset, op.Origin.Line); err != nil {
+						return "", fmt.Errorf("failed to delete node at line %d: %w", op.Origin.Line, err)
+					}
+				}
+			} else if op.NodeID != "" {
+				// Fallback to nodeId lookup (legacy syncAST behavior)
+				if err := DeleteNodeInAST(f, op.NodeID); err != nil {
+					return "", fmt.Errorf("failed to delete node %s: %w", op.NodeID, err)
 				}
 			} else {
-				// Explicit node deletion = Remove statement
-				if err := deleteNodeAtLine(f, fset, op.Origin.Line); err != nil {
-					return "", fmt.Errorf("failed to delete node at line %d: %w", op.Origin.Line, err)
-				}
+				log.Printf("Warning: delete-node requires origin or nodeId: %v", op)
+				continue
 			}
+
 			// Cascade delete: Remove relationships that reference this node
 			if varName != "" {
 				deleteRelationshipsReferencingVariable(f, varName)
@@ -168,6 +195,19 @@ func (GoASTSyncer) ApplyPatch(src string, ops []domain.PatchOperation) (string, 
 			}
 			if err := updateControlInAST(f, op.ControlID, op.ControlDesc); err != nil {
 				return "", fmt.Errorf("failed to update control %s: %w", op.ControlID, err)
+			}
+		case domain.PatchUpdateRelationship:
+			// Support both Connect/Interacts (using NodeID) and ComposedOf (using ComposedOfID)
+			relationshipID := op.NodeID
+			if relationshipID == "" {
+				relationshipID = op.ComposedOfID
+			}
+			if relationshipID == "" {
+				log.Printf("Warning: update-relationship requires nodeId or composedOfId")
+				continue
+			}
+			if err := updateRelationshipInAST(f, relationshipID, op.Property, op.Value); err != nil {
+				return "", fmt.Errorf("failed to update relationship %s: %w", relationshipID, err)
 			}
 		}
 	}
@@ -434,13 +474,13 @@ func containsRelationshipWithID(stmt ast.Stmt, relationshipID string) bool {
 			return true
 		}
 
-		// Check if it's a Connect() or Interacts() call
+		// Check if it's a Connect(), Interacts(), or ComposedOf() call
 		sel, ok := call.Fun.(*ast.SelectorExpr)
 		if !ok {
 			return true
 		}
 		funcName := sel.Sel.Name
-		if funcName != "Connect" && funcName != "Interacts" {
+		if funcName != "Connect" && funcName != "Interacts" && funcName != "ComposedOf" {
 			return true
 		}
 
@@ -467,6 +507,142 @@ func containsRelationshipWithID(stmt ast.Stmt, relationshipID string) bool {
 		return true
 	})
 	return found
+}
+
+// addToArrayVariable finds a variable definition (varName := []string{...}) and adds a new element.
+func addToArrayVariable(f *ast.File, varName, newValue string) bool {
+	found := false
+	ast.Inspect(f, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+		// Look for assignment: varName := []string{...} or varName = append(...)
+		assign, ok := n.(*ast.AssignStmt)
+		if !ok {
+			return true
+		}
+		if len(assign.Lhs) == 0 || len(assign.Rhs) == 0 {
+			return true
+		}
+		// Check if LHS is our variable
+		lhsIdent, ok := assign.Lhs[0].(*ast.Ident)
+		if !ok || lhsIdent.Name != varName {
+			return true
+		}
+		// Check if RHS is a composite literal (array)
+		compLit, ok := assign.Rhs[0].(*ast.CompositeLit)
+		if !ok {
+			return true
+		}
+		// Add new element
+		newElem := &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", newValue)}
+		compLit.Elts = append(compLit.Elts, newElem)
+		found = true
+		return false
+	})
+	return found
+}
+
+// updateRelationshipInAST finds a Connect() or Interacts() call with the specified ID and updates its properties.
+func updateRelationshipInAST(f *ast.File, relationshipID, property string, value interface{}) error {
+	found := false
+	valStr := fmt.Sprintf("%v", value)
+
+	ast.Inspect(f, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+
+		stmt, ok := n.(ast.Stmt)
+		if !ok {
+			return true
+		}
+
+		if !containsRelationshipWithID(stmt, relationshipID) {
+			return true
+		}
+
+		exprStmt, ok := stmt.(*ast.ExprStmt)
+		if !ok {
+			return true
+		}
+
+		// Traverse call chain from outermost to innermost
+		// e.g., Connect(id, desc, ...).Protocol(proto)
+		// Call(Protocol) -> X: Call(Connect)
+		curr := exprStmt.X
+		for {
+			call, ok := curr.(*ast.CallExpr)
+			if !ok {
+				break
+			}
+
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				break
+			}
+
+			// 1. Check if the current call is the property method (e.g. .Protocol("..."))
+			if strings.EqualFold(sel.Sel.Name, property) {
+				if len(call.Args) >= 1 {
+					call.Args[0] = &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", valStr)}
+					found = true
+					return false
+				}
+			}
+
+			// 2. Check if the current call is the root Connect/Interacts/ComposedOf call
+			if sel.Sel.Name == "Connect" || sel.Sel.Name == "Interacts" {
+				if strings.EqualFold(property, "description") && len(call.Args) >= 2 {
+					call.Args[1] = &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", valStr)}
+					found = true
+					return false
+				}
+				// ID match is already verified by containsRelationshipWithID
+				// Stop here as we've hit the root
+				break
+			}
+
+			// 3. Handle ComposedOf - signature: ComposedOf(id, desc, container, []string{nodes})
+			if sel.Sel.Name == "ComposedOf" {
+				if strings.EqualFold(property, "add-child-node") {
+					// Add node to the array (4th argument)
+					if len(call.Args) >= 4 {
+						// Case 1: Direct array literal []string{...}
+						if compLit, ok := call.Args[3].(*ast.CompositeLit); ok {
+							newElem := &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", valStr)}
+							compLit.Elts = append(compLit.Elts, newElem)
+							found = true
+							return false
+						}
+						// Case 2: Variable reference (e.g., sysNodes)
+						if ident, ok := call.Args[3].(*ast.Ident); ok {
+							varName := ident.Name
+							// Find the variable definition and add to its array
+							if addToArrayVariable(f, varName, valStr) {
+								found = true
+								return false
+							}
+						}
+					}
+				} else if strings.EqualFold(property, "description") && len(call.Args) >= 2 {
+					call.Args[1] = &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", valStr)}
+					found = true
+					return false
+				}
+				break
+			}
+
+			curr = sel.X
+		}
+
+		return true
+	})
+
+	if !found {
+		return fmt.Errorf("relationship %s property %s not found/updated", relationshipID, property)
+	}
+	return nil
 }
 
 // addRelationshipToAST records a new Connect() call to be added.
@@ -606,6 +782,33 @@ func updateLoopVariable(f *ast.File, varName string, delta int) error {
 	return nil
 }
 
+// generateVarNameFromID converts a node ID to a valid Go variable name.
+// Example: "payment-service-copy-123" -> "paymentServiceCopy123"
+func generateVarNameFromID(nodeID string) string {
+	parts := strings.Split(nodeID, "-")
+	var result strings.Builder
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		if i == 0 {
+			// First part: lowercase
+			result.WriteString(strings.ToLower(part))
+		} else {
+			// Subsequent parts: capitalize first letter
+			if len(part) > 0 {
+				result.WriteString(strings.ToUpper(part[:1]) + part[1:])
+			}
+		}
+	}
+	// Ensure it starts with a letter
+	name := result.String()
+	if name == "" || !((name[0] >= 'a' && name[0] <= 'z') || (name[0] >= 'A' && name[0] <= 'Z')) {
+		name = "node" + name
+	}
+	return name
+}
+
 // addInterfaceToAST finds the DefineNode call for the given nodeID and adds an Interface() call after it.
 func addInterfaceToAST(f *ast.File, fset *token.FileSet, nodeID, interfaceID, protocol string) error {
 	found := false
@@ -620,13 +823,12 @@ func addInterfaceToAST(f *ast.File, fset *token.FileSet, nodeID, interfaceID, pr
 			return true
 		}
 
-		// Look for the assignment statement containing DefineNode with matching ID
+		// Look for the statement containing DefineNode with matching ID
 		var insertIndex int = -1
 		var varName string
 
 		for i, stmt := range block.List {
-			// Check for assignment: varName := a.DefineNode("nodeID", ...) or varName = ...
-			// 1. Short Variable Declaration: varName := ...
+			// Case 1: Assignment statement: varName := a.DefineNode(...)
 			if assign, ok := stmt.(*ast.AssignStmt); ok {
 				for j, expr := range assign.Rhs {
 					if isDefineNodeCallWithID(expr, nodeID) {
@@ -639,11 +841,36 @@ func addInterfaceToAST(f *ast.File, fset *token.FileSet, nodeID, interfaceID, pr
 					}
 				}
 			}
+
+			// Case 2: Expression statement: a.DefineNode(...)
+			// Convert to variable assignment and add Interface as separate statement
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				if isDefineNodeCallWithID(exprStmt.X, nodeID) {
+					// Generate a variable name from nodeID
+					varName = generateVarNameFromID(nodeID)
+
+					// Convert expression statement to assignment
+					assignStmt := &ast.AssignStmt{
+						Lhs: []ast.Expr{ast.NewIdent(varName)},
+						Tok: token.DEFINE,
+						Rhs: []ast.Expr{exprStmt.X},
+					}
+
+					// Replace the expression statement with assignment
+					block.List[i] = assignStmt
+
+					// Set insert index for the interface call
+					insertIndex = i + 1
+					break
+				}
+			}
+
 			if insertIndex != -1 {
 				break
 			}
 		}
 
+		// Handle variable assignment case
 		if insertIndex != -1 && varName != "" {
 			// Create the new statement: varName.Interface("id", "proto")
 			// We can't easily construct a full AST manually with positions, so we construct a call expression
@@ -678,30 +905,58 @@ func addInterfaceToAST(f *ast.File, fset *token.FileSet, nodeID, interfaceID, pr
 	})
 
 	if !found {
-		return fmt.Errorf("definition for node %s not found (must be explicit variable assignment)", nodeID)
+		return fmt.Errorf("definition for node %s not found", nodeID)
 	}
 	return nil
 }
 
-// isDefineNodeCallWithID checks if expr is a DefineNode call for the specific nodeID
+// isDefineNodeCallWithID checks if expr is a DefineNode call for the specific nodeID, possibly inside a chain.
 func isDefineNodeCallWithID(expr ast.Expr, nodeID string) bool {
 	call, ok := expr.(*ast.CallExpr)
 	if !ok {
 		return false
 	}
-	if !isDefineNode(call) {
-		return false
+
+	// Case 1: Direct DefineNode call
+	if isDefineNode(call) {
+		if len(call.Args) < 1 {
+			return false
+		}
+		// Check first arg (ID)
+		lit, ok := call.Args[0].(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return false
+		}
+		val := strings.Trim(lit.Value, "\"`")
+		return val == nodeID
 	}
-	if len(call.Args) < 1 {
-		return false
+
+	// Case 2: Method chain (e.g. DefineNode(...).Interface(...))
+	// We need to check the object being called (X in SelectorExpr)
+	if _, ok := call.Fun.(*ast.SelectorExpr); ok {
+		// Traverse down the chain
+		// The structure is CallExpr -> SelectorExpr -> X (recursive)
+		// We'll perform a simple unwrapping
+		curr := call.Fun
+		for {
+			sel, ok := curr.(*ast.SelectorExpr)
+			if !ok {
+				break
+			}
+			// If X is a call, check if it's our target
+			if subCall, ok := sel.X.(*ast.CallExpr); ok {
+				if isDefineNodeCallWithID(subCall, nodeID) {
+					return true
+				}
+				// If not directly DefineNode, continue unwrapping
+				curr = subCall.Fun
+			} else {
+				break
+			}
+		}
 	}
-	// Check first arg (ID)
-	lit, ok := call.Args[0].(*ast.BasicLit)
-	if !ok || lit.Kind != token.STRING {
-		return false
-	}
-	val := strings.Trim(lit.Value, "\"")
-	return val == nodeID
+
+	return false
 }
 
 // deleteInterfaceFromAST finds an Interface("id", ...) call and removes it.

@@ -1,8 +1,6 @@
 package usecase
 
 import (
-	"fmt"
-
 	"github.com/sokoide/advent-of-calm-2025/internal/domain"
 )
 
@@ -14,17 +12,6 @@ type LayoutRepository = domain.LayoutRepository
 
 // ASTSyncer is a use-case level alias for the domain port.
 type ASTSyncer = domain.ASTSyncer
-
-// NodeAction represents a node update requested by the UI.
-type NodeAction struct {
-	Action   string
-	NodeID   string
-	NodeType string
-	Name     string
-	Desc     string
-	Property string
-	Value    string
-}
 
 // StudioService coordinates layout persistence and AST synchronization.
 type StudioService struct {
@@ -50,20 +37,6 @@ func (s StudioService) SaveLayout(id string, layout *Layout) error {
 // SyncFromJSON applies a JSON model to the Go DSL source.
 func (s StudioService) SyncFromJSON(src, jsonStr string) (string, error) {
 	return s.ASTSyncer.SyncFromJSON(src, jsonStr)
-}
-
-// ApplyNodeAction applies a node mutation to the Go DSL source.
-func (s StudioService) ApplyNodeAction(src string, action NodeAction) (string, error) {
-	switch action.Action {
-	case "add":
-		return s.ASTSyncer.AddNode(src, action.NodeID, action.NodeType, action.Name, action.Desc)
-	case "update":
-		return s.ASTSyncer.UpdateNodeProperty(src, action.NodeID, action.Property, action.Value)
-	case "delete":
-		return s.ASTSyncer.DeleteNode(src, action.NodeID)
-	default:
-		return "", fmt.Errorf("invalid action: %s", action.Action)
-	}
 }
 
 // ApplyPatch applies a list of patch operations to the Go DSL source.

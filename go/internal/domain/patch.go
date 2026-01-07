@@ -4,10 +4,12 @@ package domain
 type PatchType string
 
 const (
+	PatchAddNode            PatchType = "add-node"
 	PatchUpdateNode         PatchType = "update-node"
 	PatchDeleteNode         PatchType = "delete-node"
 	PatchUpdateCount        PatchType = "update-count" // For loop variables
 	PatchDeleteRelationship PatchType = "delete-relationship"
+	PatchUpdateRelationship PatchType = "update-relationship"
 	PatchAddRelationship    PatchType = "add-relationship"
 	PatchAddInterface       PatchType = "add-interface"
 	PatchDeleteInterface    PatchType = "delete-interface"
@@ -44,6 +46,9 @@ type PatchOperation struct {
 	ComposedOfDesc string       `json:"composedOfDesc,omitempty"` // For update-composed-of
 	ControlID      string       `json:"controlId,omitempty"`      // For add/update/delete-control
 	ControlDesc    string       `json:"controlDesc,omitempty"`    // For add/update-control
+	NodeName       string       `json:"nodeName,omitempty"`       // For add-node
+	NodeTypeName   string       `json:"nodeTypeName,omitempty"`   // For add-node (e.g., "Service", "Database")
+	NodeDesc       string       `json:"nodeDesc,omitempty"`       // For add-node
 }
 
 // PatchOrigin carries the necessary info to locate the code.

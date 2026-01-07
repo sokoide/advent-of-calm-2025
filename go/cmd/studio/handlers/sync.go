@@ -10,59 +10,7 @@ import (
 	"strings"
 
 	"github.com/sokoide/advent-of-calm-2025/internal/domain"
-	"github.com/sokoide/advent-of-calm-2025/internal/usecase"
 )
-
-// HandleASTSync handles AST-based node operations.
-func (s *State) HandleASTSync(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req struct {
-		Action   string `json:"action"`
-		NodeID   string `json:"nodeId"`
-		NodeType string `json:"nodeType,omitempty"`
-		Name     string `json:"name,omitempty"`
-		Desc     string `json:"desc,omitempty"`
-		Property string `json:"property,omitempty"`
-		Value    string `json:"value,omitempty"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	src, err := os.ReadFile(s.DSLPath())
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	newCode, err := s.StudioSvc.ApplyNodeAction(string(src), usecase.NodeAction{
-		Action:   req.Action,
-		NodeID:   req.NodeID,
-		NodeType: req.NodeType,
-		Name:     req.Name,
-		Desc:     req.Desc,
-		Property: req.Property,
-		Value:    req.Value,
-	})
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if err := os.WriteFile(s.DSLPath(), []byte(newCode), 0644); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	log.Printf("✅ AST Synced: %s node %s", req.Action, req.NodeID)
-	w.WriteHeader(http.StatusOK)
-}
 
 // HandlePatch handles AST patching operations.
 func (s *State) HandlePatch(w http.ResponseWriter, r *http.Request) {

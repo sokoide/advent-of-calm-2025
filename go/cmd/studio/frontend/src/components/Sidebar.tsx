@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { type Node } from 'reactflow';
-import { X, Trash2, Save, AlertCircle, Code, Plus, Trash, Layers } from 'lucide-react';
+import { X, Trash2, Save, AlertCircle, Code, Plus, Trash, Layers, Copy } from 'lucide-react';
 import type { CalmNode, CalmRelationship } from '../domain/calm';
 
 interface SidebarProps {
@@ -9,6 +9,7 @@ interface SidebarProps {
   relationships: CalmRelationship[];
   onUpdate: (id: string, data: Partial<CalmNode>) => void;
   onDelete: (id: string) => void;
+  onDuplicate?: (id: string) => void;
   onClose: () => void;
   onAddInterface?: (nodeId: string, interfaceId: string, protocol: string) => void;
   onDeleteInterface?: (nodeId: string, interfaceId: string) => void;
@@ -16,7 +17,7 @@ interface SidebarProps {
   onRemoveChildNode?: (composedOfId: string, childNodeId: string) => void;
 }
 
-const Sidebar = ({ selectedNode, allNodes, relationships, onUpdate, onDelete, onClose, onAddInterface, onDeleteInterface, onAddChildNode, onRemoveChildNode }: SidebarProps) => {
+const Sidebar = ({ selectedNode, allNodes, relationships, onUpdate, onDelete, onDuplicate, onClose, onAddInterface, onDeleteInterface, onAddChildNode, onRemoveChildNode }: SidebarProps) => {
   const [formData, setFormData] = useState<Partial<CalmNode>>({});
 
   useEffect(() => {
@@ -408,6 +409,14 @@ const Sidebar = ({ selectedNode, allNodes, relationships, onUpdate, onDelete, on
         >
           <Save size={16} /> Save Changes
         </button>
+        {onDuplicate && (
+          <button
+            onClick={() => onDuplicate(selectedNode.id)}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-md font-semibold transition-all bg-slate-800 text-green-400 border border-slate-700 hover:bg-green-950/30 hover:text-green-300 active:scale-95"
+          >
+            <Copy size={16} /> Duplicate Node
+          </button>
+        )}
         <button
           onClick={() => {
             if (confirm('Are you sure you want to delete this node? This will update the Go source code.')) {

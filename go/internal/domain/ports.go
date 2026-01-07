@@ -13,9 +13,6 @@ type Parser interface {
 // ASTSyncer updates Go DSL sources based on model changes.
 type ASTSyncer interface {
 	SyncFromJSON(src, jsonStr string) (string, error)
-	AddNode(src, nodeID, nodeType, name, desc string) (string, error)
-	UpdateNodeProperty(src, nodeID, property, value string) (string, error)
-	DeleteNode(src, nodeID string) (string, error)
 	ApplyPatch(src string, ops []PatchOperation) (string, error)
 }
 

@@ -90,7 +90,6 @@ func run() error {
 	http.HandleFunc("/update", handlers.WithCORS(state.HandleUpdate))
 	http.HandleFunc("/d2-to-go", handlers.WithCORS(state.HandleD2ToGo))
 	http.HandleFunc("/layout", handlers.WithCORS(state.HandleLayout))
-	http.HandleFunc("/sync-ast", handlers.WithCORS(state.HandleASTSync))
 	http.HandleFunc("/preview-json-sync", handlers.WithCORS(state.HandlePreviewJSONSync))
 	http.HandleFunc("/patch", handlers.WithCORS(state.HandlePatch))
 	http.HandleFunc("/svg", handlers.WithCORS(state.ServeSVG))

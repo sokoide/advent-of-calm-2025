@@ -1,5 +1,5 @@
 import type { LayoutData } from '../domain/calm';
-import type { StudioAPI, RealtimeClient, SyncASTRequest, PatchOperation } from '../domain/ports';
+import type { StudioAPI, RealtimeClient, PatchOperation } from '../domain/ports';
 
 export class StudioUseCase {
   private readonly api: StudioAPI;
@@ -30,9 +30,6 @@ export class StudioUseCase {
     return this.api.saveLayout(archId, layout);
   }
 
-  syncAST(request: SyncASTRequest) {
-    return this.api.syncAST(request);
-  }
 
   patchAST(ops: PatchOperation[]) {
     return this.api.patchAST(ops);
