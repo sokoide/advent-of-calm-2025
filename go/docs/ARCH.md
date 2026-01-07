@@ -77,7 +77,7 @@ The backend acts not just as a simple API server, but as an engine for analyzing
 - `GET /svg`: Generates and returns SVG only when necessary (common to Local Agent/Server).
 
 ### Role of the Local Agent
-The Local Agent is a lightweight HTTP server running on `localhost`, acting as a bridge to execute local Go/D2 from the browser. It can be started alongside Studio with `make studio-local`, and its logs are prefixed with `agent:`.
+The Local Agent is a lightweight HTTP server running on `localhost`, acting as a bridge to execute local Go/D2 from the browser. It can be started alongside Studio with `make studio`, and its logs are prefixed with `agent:`.
 
 ### Clean Arch Compliance and Exceptions (Go side)
 **Conclusion**: While the primary separation of Domain/UseCase/Infra is achieved, some "exceptions" remain where logic is pushed into the Framework for implementation and operational convenience.

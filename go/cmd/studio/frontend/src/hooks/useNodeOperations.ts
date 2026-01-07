@@ -148,7 +148,7 @@ export function useNodeOperations({
 
             if (origin) {
                 const patchOrigin = toPatchOrigin(origin);
-                await studio.patchAST([{ type: 'delete-node', origin: patchOrigin }]);
+                await studio.patchAST([{ type: 'delete-node', nodeId: id, origin: patchOrigin }]);
             } else {
                 await studio.syncAST({ action: 'delete', nodeId: id });
             }

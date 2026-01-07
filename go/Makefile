@@ -1,4 +1,4 @@
-.PHONY: build format run validate diff difftool clean help setup watch diff-arch d2 watch-d2 check studio test test-coverage testcoverage studio-local
+.PHONY: build format run validate diff difftool clean help setup watch diff-arch d2 watch-d2 check studio test test-coverage testcoverage studio-ui
 
 # デフォルトターゲット
 help:

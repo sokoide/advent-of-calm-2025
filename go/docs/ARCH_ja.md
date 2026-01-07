@@ -77,7 +77,7 @@ graph LR
 - `GET /svg`: 必要時のみSVGを生成して返却（Local Agent/Server共通）。
 
 ### Local Agent の位置づけ
-Local Agent は `localhost` で動作する軽量HTTPサーバーで、ブラウザからローカルのGo/D2を実行するための橋渡し役です。`make studio-local` で Studio と一緒に起動でき、ログには `agent:` / `studio:` のプレフィックスが付きます。
+Local Agent は `localhost` で動作する軽量HTTPサーバーで、ブラウザからローカルのGo/D2を実行するための橋渡し役です。`make studio` で Studio と一緒に起動でき、ログには `agent:` / `studio:` のプレフィックスが付きます。
 
 ### Clean Arch 適合度と例外（Go側）
 **結論**: 主要なDomain/UseCase/Infraの分離はできているが、一部は実装・運用の都合でFrameworkに寄せた“例外”が残っています。
