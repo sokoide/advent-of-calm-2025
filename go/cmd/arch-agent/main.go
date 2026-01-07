@@ -378,7 +378,14 @@ func (s *server) handlePatch(w http.ResponseWriter, r *http.Request) {
 	log.Printf("POST /patch: %d operations from %s", len(ops), r.RemoteAddr)
 	for i, op := range ops {
 		if op.Origin != nil {
-			log.Printf("  [%d] type=%s nodeId=%s loopVar=%s line=%d", i, op.Type, op.NodeID, op.Origin.LoopVar, op.Origin.Line)
+			log.Printf(
+				"  [%d] type=%s nodeId=%s loopVar=%s line=%d",
+				i,
+				op.Type,
+				op.NodeID,
+				op.Origin.LoopVar,
+				op.Origin.Line,
+			)
 		} else {
 			log.Printf("  [%d] type=%s nodeId=%s", i, op.Type, op.NodeID)
 		}
