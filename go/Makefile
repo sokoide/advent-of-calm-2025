@@ -18,8 +18,8 @@ help:
 	@echo "  make d2        - D2 ダイアグラムを生成します"
 	@echo "  make watch     - ライブサーバーを起動してブラウザで自動更新 (Mermaid)"
 	@echo "  make watch-d2  - ライブサーバーを起動してブラウザで自動更新 (D2)"
-	@echo "  make studio    - CALM Studio (双方向エディタ) を起動します"
-	@echo "  make studio-local - CALM Studio と local agent を同時に起動します"
+	@echo "  make studio    - CALM Studio (エディタ + AIエージェント) を起動します"
+	@echo "  make studio-ui - CALM Studio (エディタのみ) を起動します"
 	@echo "  make clean     - 生成されたバイナリや一時ファイルを削除します"
 
 # セットアップ: 必要なツールをインストール
@@ -109,13 +109,8 @@ watch-d2:
 	@command -v d2 >/dev/null 2>&1 || (echo "❌ d2 が見つかりません。brew install d2 を実行してください。" && exit 1)
 	@cd cmd/watch && go run . -d2 ../..
 
-# CALM Studio: 双方向エディタ (Go DSL ↔ D2)
+# CALM Studio: エディタ + AIエージェント (フルセット)
 studio: cmd/studio/frontend/dist
-	@echo "🎨 Starting CALM Studio..."
-	@command -v d2 >/dev/null 2>&1 || (echo "❌ d2 が見つかりません。brew install d2 を実行してください。" && exit 1)
-	@cd cmd/studio && STUDIO_GENERATE_MODE=gorun go run . ../..
-
-studio-local: cmd/studio/frontend/dist
 	@echo "🧭 Starting local agent + CALM Studio..."
 	@command -v d2 >/dev/null 2>&1 || (echo "❌ d2 が見つかりません。brew install d2 を実行してください。" && exit 1)
 	@bash -c 'set -euo pipefail; \
@@ -123,6 +118,12 @@ studio-local: cmd/studio/frontend/dist
 		(STUDIO_GENERATE_MODE=gorun go run ./cmd/studio 2>&1 | sed -u "s/^/studio: /") & STUDIO_PID=$$!; \
 		trap "kill $$AGENT_PID $$STUDIO_PID 2>/dev/null || true" INT TERM EXIT; \
 		wait $$AGENT_PID $$STUDIO_PID'
+
+# CALM Studio UI: 双方向エディタのみ (オフライン/マニュアル編集用)
+studio-ui: cmd/studio/frontend/dist
+	@echo "🎨 Starting CALM Studio UI..."
+	@command -v d2 >/dev/null 2>&1 || (echo "❌ d2 が見つかりません。brew install d2 を実行してください。" && exit 1)
+	@cd cmd/studio && STUDIO_GENERATE_MODE=gorun go run . ../..
 
 cmd/studio/frontend/dist: cmd/studio/frontend/src/App.tsx
 	@echo "📦 Building frontend..."

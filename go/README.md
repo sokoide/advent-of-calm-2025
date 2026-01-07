@@ -102,7 +102,7 @@ Recursively renders complex nesting (Containers) like `Order Database Cluster` i
 
 ### Launching CALM Studio
 
-Build the frontend and launch the server with one command:
+Build the frontend and launch the **server with the AI Agent** with one command:
 
 ```bash
 make studio
@@ -115,20 +115,21 @@ Then, open `http://localhost:3000` and explore these tabs:
 -   **CALM JSON**: View JSON and perform "Reverse Sync" back to Go.
 -   **D2 Diagram**: High-fidelity static view powered by D2.
 
-### Launching Local Agent + Studio
+### Launching CALM Studio UI (Editor only)
 
-If you want to prioritize using your local Go/D2 toolchain, launch both simultaneously:
+If you want to use the lightweight editor without the AI Agent, use this command:
 
 ```bash
-make studio-local
+make studio-ui
 ```
 
-`studio-local` displays logs with `agent:` / `studio:` prefixes.
+`studio` displays logs with `agent:` / `studio:` prefixes.
 
-#### Significance of the Local Agent
+#### Significance of the AI Agent
 
 -   **Avoid Server Overload**: Conversion (Go DSL → JSON/D2) and SVG generation are executed on the client side, allowing the server to focus on storage and delivery.
 -   **Leverage Local Go/D2**: Since conversion and SVG generation use each user's Go compiler and D2 CLI, overall throughput is increased.
+-   **AI Assistance**: Enables external AI assistants to access architecture definitions via port `8787` for design suggestions and code generation.
 
 ### Other Make Targets
 
