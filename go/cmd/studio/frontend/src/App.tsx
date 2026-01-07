@@ -635,11 +635,49 @@ function App() {
 
         <Sidebar
           selectedNode={selectedNode}
+          allNodes={nodes}
+          relationships={jsonRelationships}
           onUpdate={onUpdateNode}
           onDelete={onDeleteNode}
           onClose={() => setSelectedNode(null)}
           onAddInterface={handleAddInterface}
           onDeleteInterface={handleDeleteInterface}
+          onAddChildNode={async (composedOfId, childNodeId) => {
+            if (studio) {
+              // Find existing composed-of relationship
+              const rel = jsonRelationships.find(r => r['unique-id'] === composedOfId);
+              const existingNodes = rel?.['relationship-type']?.['composed-of']?.nodes || [];
+              const newChildList = [...existingNodes, childNodeId];
+              try {
+                await studio.patchAST([{
+                  type: 'update-composed-of',
+                  composedOfId,
+                  childNodeIds: newChildList,
+                }]);
+                setTimeout(() => fetchData(true), 500);
+              } catch (err) {
+                console.error('Failed to add child:', err);
+              }
+            }
+          }}
+          onRemoveChildNode={async (composedOfId, childNodeId) => {
+            if (studio) {
+              // Find existing composed-of relationship
+              const rel = jsonRelationships.find(r => r['unique-id'] === composedOfId);
+              const existingNodes = rel?.['relationship-type']?.['composed-of']?.nodes || [];
+              const newChildList = existingNodes.filter(id => id !== childNodeId);
+              try {
+                await studio.patchAST([{
+                  type: 'update-composed-of',
+                  composedOfId,
+                  childNodeIds: newChildList,
+                }]);
+                setTimeout(() => fetchData(true), 500);
+              } catch (err) {
+                console.error('Failed to remove child:', err);
+              }
+            }
+          }}
         />
 
         <EdgeSidebar

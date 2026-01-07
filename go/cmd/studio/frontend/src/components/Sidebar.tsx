@@ -1,18 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { type Node } from 'reactflow';
-import { X, Trash2, Save, AlertCircle, Code, Plus, Trash } from 'lucide-react';
-import type { CalmNode } from '../domain/calm';
+import { X, Trash2, Save, AlertCircle, Code, Plus, Trash, Layers } from 'lucide-react';
+import type { CalmNode, CalmRelationship } from '../domain/calm';
 
 interface SidebarProps {
   selectedNode: Node | null;
+  allNodes: Node[];
+  relationships: CalmRelationship[];
   onUpdate: (id: string, data: Partial<CalmNode>) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
   onAddInterface?: (nodeId: string, interfaceId: string, protocol: string) => void;
   onDeleteInterface?: (nodeId: string, interfaceId: string) => void;
+  onAddChildNode?: (composedOfId: string, childNodeId: string) => void;
+  onRemoveChildNode?: (composedOfId: string, childNodeId: string) => void;
 }
 
-const Sidebar = ({ selectedNode, onUpdate, onDelete, onClose, onAddInterface, onDeleteInterface }: SidebarProps) => {
+const Sidebar = ({ selectedNode, allNodes, relationships, onUpdate, onDelete, onClose, onAddInterface, onDeleteInterface, onAddChildNode, onRemoveChildNode }: SidebarProps) => {
   const [formData, setFormData] = useState<Partial<CalmNode>>({});
 
   useEffect(() => {
@@ -20,6 +24,35 @@ const Sidebar = ({ selectedNode, onUpdate, onDelete, onClose, onAddInterface, on
       setFormData(selectedNode.data.calm);
     }
   }, [selectedNode]);
+
+  // ComposedOf info - computed at top level to respect hooks rules
+  const composedOfInfo = useMemo(() => {
+    if (!selectedNode) return null;
+    for (const rel of relationships) {
+      const composedOfData = rel['relationship-type']?.['composed-of'];
+      if (composedOfData && composedOfData.container === selectedNode.id) {
+        return {
+          id: rel['unique-id'],
+          container: composedOfData.container,
+          nodes: composedOfData.nodes || [],
+        };
+      }
+    }
+    return null;
+  }, [relationships, selectedNode]);
+
+  const availableChildNodes = useMemo(() => {
+    if (!composedOfInfo || !selectedNode) return [];
+    return allNodes.filter(n =>
+      n.id !== selectedNode.id &&
+      !composedOfInfo.nodes.includes(n.id)
+    );
+  }, [allNodes, composedOfInfo, selectedNode]);
+
+  const getNodeLabel = (nodeId: string) => {
+    const node = allNodes.find(n => n.id === nodeId);
+    return node?.data?.label || nodeId;
+  };
 
   if (!selectedNode) return null;
 
@@ -245,6 +278,60 @@ const Sidebar = ({ selectedNode, onUpdate, onDelete, onClose, onAddInterface, on
             </div>
           )}
         </div>
+
+        {/* ComposedOf Section (for container nodes) */}
+        {selectedNode.data.isContainer && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Layers size={14} className="text-purple-400" />
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">ComposedOf Children</label>
+            </div>
+            {composedOfInfo ? (
+              <div className="space-y-2">
+                {composedOfInfo.nodes.map((nodeId) => (
+                  <div key={nodeId} className="flex items-center justify-between bg-purple-900/20 border border-purple-800/30 rounded px-3 py-2 group">
+                    <span className="text-sm text-slate-200">{getNodeLabel(nodeId)}</span>
+                    {onRemoveChildNode && (
+                      <button
+                        onClick={() => {
+                          if (confirm(`Remove "${getNodeLabel(nodeId)}" from this container?`)) {
+                            onRemoveChildNode(composedOfInfo.id, nodeId);
+                          }
+                        }}
+                        className="text-slate-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                      >
+                        <Trash size={12} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {onAddChildNode && availableChildNodes.length > 0 && (
+                  <select
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        onAddChildNode(composedOfInfo.id, e.target.value);
+                        e.target.value = '';
+                      }
+                    }}
+                    className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-400 focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="">+ Add child node...</option>
+                    {availableChildNodes.map((node) => (
+                      <option key={node.id} value={node.id}>
+                        {node.data?.label || node.id}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <div className="text-[10px] text-slate-500 font-mono">{composedOfInfo.id}</div>
+              </div>
+            ) : (
+              <div className="text-xs text-slate-600 italic border border-dashed border-slate-800 rounded p-2 text-center">
+                No ComposedOf relationship yet
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Metadata Section */}
         <div className="space-y-2">

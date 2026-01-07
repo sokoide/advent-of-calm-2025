@@ -39,7 +39,7 @@ type PatchOperation struct {
 	FlowDesc       string       `json:"flowDesc,omitempty"`       // For add-flow, update-flow
 	FlowSteps      []string     `json:"flowSteps,omitempty"`      // For add-flow, update-flow (list of relationship IDs)
 	ContainerID    string       `json:"containerId,omitempty"`    // For add-composed-of
-	ChildNodeIDs   []string     `json:"childNodeIds,omitempty"`   // For add-composed-of
+	ChildNodeIDs   []string     `json:"childNodeIds,omitempty"`   // For add/update-composed-of
 	ComposedOfID   string       `json:"composedOfId,omitempty"`   // For update/delete-composed-of
 	ComposedOfDesc string       `json:"composedOfDesc,omitempty"` // For update-composed-of
 	ControlID      string       `json:"controlId,omitempty"`      // For add/update/delete-control

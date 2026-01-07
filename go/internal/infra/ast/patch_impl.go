@@ -142,7 +142,7 @@ func (GoASTSyncer) ApplyPatch(src string, ops []domain.PatchOperation) (string, 
 				log.Printf("Warning: update-composed-of requires composedOfId")
 				continue
 			}
-			if err := updateComposedOfInAST(f, op.ComposedOfID, op.ComposedOfDesc); err != nil {
+			if err := updateComposedOfInAST(f, op.ComposedOfID, op.ComposedOfDesc, op.ChildNodeIDs); err != nil {
 				return "", fmt.Errorf("failed to update composed-of %s: %w", op.ComposedOfID, err)
 			}
 		case domain.PatchUpdateControl:
@@ -1220,8 +1220,8 @@ func insertControlIntoSource(src, controlID, desc string) string {
 	return src[:insertPoint] + controlCode + src[insertPoint:]
 }
 
-// updateComposedOfInAST updates the description of a ComposedOf call in the AST.
-func updateComposedOfInAST(f *ast.File, composedOfID, newDesc string) error {
+// updateComposedOfInAST updates a ComposedOf call in the AST (description and/or child nodes).
+func updateComposedOfInAST(f *ast.File, composedOfID, newDesc string, newChildNodeIDs []string) error {
 	found := false
 
 	ast.Inspect(f, func(n ast.Node) bool {
@@ -1259,9 +1259,23 @@ func updateComposedOfInAST(f *ast.File, composedOfID, newDesc string) error {
 			return true
 		}
 
-		// Update description (second argument)
-		if len(call.Args) >= 2 {
+		// Update description (second argument) if provided
+		if newDesc != "" && len(call.Args) >= 2 {
 			call.Args[1] = &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", newDesc)}
+		}
+
+		// Update child nodes if provided
+		if len(newChildNodeIDs) > 0 && len(call.Args) >= 4 {
+			// Args[2] = container, Args[3] = nodes slice
+			// Build new composite literal for nodes
+			elts := make([]ast.Expr, len(newChildNodeIDs))
+			for i, nodeID := range newChildNodeIDs {
+				elts[i] = &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", nodeID)}
+			}
+			call.Args[3] = &ast.CompositeLit{
+				Type: &ast.ArrayType{Elt: &ast.Ident{Name: "string"}},
+				Elts: elts,
+			}
 		}
 
 		found = true
