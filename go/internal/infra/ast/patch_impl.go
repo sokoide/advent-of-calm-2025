@@ -83,9 +83,9 @@ func (GoASTSyncer) ApplyPatch(src string, ops []domain.PatchOperation) (string, 
 			}
 
 			// Cascade delete: Remove relationships that reference this node
-			if varName != "" {
-				deleteRelationshipsReferencingVariable(f, varName)
-				deleteComposedOfReferencingVariable(f, varName)
+			if varName != "" || op.NodeID != "" {
+				deleteRelationshipsReferencingVariable(f, varName, op.NodeID)
+				deleteComposedOfReferencingVariable(f, varName, op.NodeID)
 			}
 		case domain.PatchDeleteRelationship:
 			// Delete Connect() call by relationship ID (no origin needed)
@@ -1670,8 +1670,8 @@ func isDefineNodeCallSimple(call *ast.CallExpr) bool {
 	return sel.Sel.Name == "DefineNode"
 }
 
-// deleteRelationshipsReferencingVariable removes all ConnectTo calls that reference the given Go variable name
-func deleteRelationshipsReferencingVariable(f *ast.File, varName string) {
+// deleteRelationshipsReferencingVariable removes all ConnectTo calls that reference the given Go variable name or node ID
+func deleteRelationshipsReferencingVariable(f *ast.File, varName string, nodeID string) {
 	for _, decl := range f.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok || fn.Body == nil {
@@ -1685,14 +1685,14 @@ func deleteRelationshipsReferencingVariable(f *ast.File, varName string) {
 
 			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
 				if call, ok := exprStmt.X.(*ast.CallExpr); ok {
-					if callChainReferencesVariable(call, varName) {
+					if callChainReferencesVariable(call, varName, nodeID) {
 						shouldDelete = true
 					}
 				}
 			} else if assignStmt, ok := stmt.(*ast.AssignStmt); ok {
 				if len(assignStmt.Rhs) > 0 {
 					if call, ok := assignStmt.Rhs[0].(*ast.CallExpr); ok {
-						if callChainReferencesVariable(call, varName) {
+						if callChainReferencesVariable(call, varName, nodeID) {
 							shouldDelete = true
 						}
 					}
@@ -1707,14 +1707,24 @@ func deleteRelationshipsReferencingVariable(f *ast.File, varName string) {
 	}
 }
 
-// callChainReferencesVariable checks if a call expression chain references the given Go variable name
-func callChainReferencesVariable(call *ast.CallExpr, varName string) bool {
+// callChainReferencesVariable checks if a call expression chain references the given Go variable name or node ID
+func callChainReferencesVariable(call *ast.CallExpr, varName string, nodeID string) bool {
 	// Use a stack to traverse all call expressions in the chain
 	var checkExpr func(expr ast.Expr) bool
 	checkExpr = func(expr ast.Expr) bool {
 		switch e := expr.(type) {
 		case *ast.CallExpr:
-			// Check arguments
+			// Special handling for Connect(), Interacts(), and Interface() calls:
+			// Check if arguments reference the variable via variableReferenceMatches
+			if isRelationshipOrInterfaceCall(e) {
+				for _, arg := range e.Args {
+					if variableReferenceMatches(arg, varName, nodeID) {
+						return true
+					}
+				}
+			}
+
+			// Check other arguments
 			for _, arg := range e.Args {
 				if checkExpr(arg) {
 					return true
@@ -1725,11 +1735,21 @@ func callChainReferencesVariable(call *ast.CallExpr, varName string) bool {
 
 		case *ast.SelectorExpr:
 			// Check if this is n.<varName> or nc.<varName>
-			if e.Sel.Name == varName {
+			if varName != "" && e.Sel.Name == varName {
 				return true
 			}
 			// Continue checking the receiver
 			return checkExpr(e.X)
+
+		case *ast.Ident:
+			return varName != "" && e.Name == varName
+
+		case *ast.BasicLit:
+			if nodeID != "" && e.Kind == token.STRING {
+				val := strings.Trim(e.Value, "\"`")
+				return val == nodeID
+			}
+			return false
 
 		default:
 			return false
@@ -1739,8 +1759,8 @@ func callChainReferencesVariable(call *ast.CallExpr, varName string) bool {
 	return checkExpr(call)
 }
 
-// deleteComposedOfReferencingVariable removes or updates ComposedOf calls that reference the given variable
-func deleteComposedOfReferencingVariable(f *ast.File, varName string) {
+// deleteComposedOfReferencingVariable removes or updates ComposedOf calls that reference the given variable or node ID
+func deleteComposedOfReferencingVariable(f *ast.File, varName string, nodeID string) {
 	for _, decl := range f.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok || fn.Body == nil {
@@ -1763,13 +1783,13 @@ func deleteComposedOfReferencingVariable(f *ast.File, varName string) {
 
 			// Check if it's a ComposedOf call
 			if isComposedOfCall(call) {
-				// 1. Check if the container (parent) matches varName -> Delete entire statement
-				if composedOfContainerMatches(call, varName) {
+				// 1. Check if the container (parent) matches varName or nodeID -> Delete entire statement
+				if composedOfContainerMatches(call, varName, nodeID) {
 					continue // Delete statement
 				}
 
 				// 2. Check and filter children slice
-				if removeComposedOfChild(call, varName) {
+				if removeComposedOfChild(call, varName, nodeID) {
 					// Modified in place, keep the statement
 				}
 			}
@@ -1820,17 +1840,17 @@ func getComposedOfBaseCall(call *ast.CallExpr) *ast.CallExpr {
 	return nil
 }
 
-func composedOfContainerMatches(call *ast.CallExpr, varName string) bool {
+func composedOfContainerMatches(call *ast.CallExpr, varName string, nodeID string) bool {
 	baseCall := getComposedOfBaseCall(call)
 	if baseCall == nil || len(baseCall.Args) < 3 {
 		return false
 	}
 	// Container is 3rd argument
-	return variableReferenceMatches(baseCall.Args[2], varName)
+	return variableReferenceMatches(baseCall.Args[2], varName, nodeID)
 }
 
-// removeComposedOfChild removes the varName from the children slice. Returns true if modified.
-func removeComposedOfChild(call *ast.CallExpr, varName string) bool {
+// removeComposedOfChild removes the varName or nodeID from the children slice. Returns true if modified.
+func removeComposedOfChild(call *ast.CallExpr, varName string, nodeID string) bool {
 	baseCall := getComposedOfBaseCall(call)
 	if baseCall == nil || len(baseCall.Args) < 4 {
 		return false
@@ -1844,7 +1864,7 @@ func removeComposedOfChild(call *ast.CallExpr, varName string) bool {
 	newElts := make([]ast.Expr, 0, len(comp.Elts))
 	modified := false
 	for _, elt := range comp.Elts {
-		if variableReferenceMatches(elt, varName) {
+		if variableReferenceMatches(elt, varName, nodeID) {
 			modified = true
 			continue
 		}
@@ -1857,22 +1877,38 @@ func removeComposedOfChild(call *ast.CallExpr, varName string) bool {
 	return modified
 }
 
-// variableReferenceMatches checks if an expression references varName (e.g. n.OrderReplica or n.OrderReplica.UniqueID)
-func variableReferenceMatches(expr ast.Expr, varName string) bool {
+// isRelationshipOrInterfaceCall checks if a call expression is a.Connect(), a.Interacts(), or varName.Interface()
+func isRelationshipOrInterfaceCall(call *ast.CallExpr) bool {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	return sel.Sel.Name == "Connect" || sel.Sel.Name == "Interacts" || sel.Sel.Name == "Interface"
+}
+
+// variableReferenceMatches checks if an expression references varName (e.g. n.OrderReplica or n.OrderReplica.UniqueID) or nodeID
+func variableReferenceMatches(expr ast.Expr, varName string, nodeID string) bool {
 	switch e := expr.(type) {
 	case *ast.SelectorExpr:
 		// Check "UniqueID" pattern: n.OrderReplica.UniqueID
 		if e.Sel.Name == "UniqueID" {
 			// Check X
-			return variableReferenceMatches(e.X, varName)
+			return variableReferenceMatches(e.X, varName, nodeID)
 		}
 		// Check direct access: n.OrderReplica
-		if e.Sel.Name == varName {
+		if varName != "" && e.Sel.Name == varName {
 			return true
 		}
 	case *ast.Ident:
-		if e.Name == varName {
+		if varName != "" && e.Name == varName {
 			return true
+		}
+	case *ast.BasicLit:
+		if nodeID != "" && e.Kind == token.STRING {
+			val := strings.Trim(e.Value, "\"`")
+			if val == nodeID {
+				return true
+			}
 		}
 	}
 	return false

@@ -532,7 +532,7 @@ func wireComponents(a *domain.Architecture, n *nodesContainer) *linksContainer {
 	a.ComposedOf("order-db-composition", "Primary and replica databases form the order database cluster.", n.DBCluster.UniqueID, []string{n.OrderPrimary.UniqueID, n.OrderReplica.UniqueID}).
 		Data("confidential", true)
 
-	sysNodes := []string{n.LB.UniqueID}
+	sysNodes := []string{n.LB.UniqueID, "order-database-cluster-copy-1767870184810"}
 	for _, gw := range n.Gateways {
 		sysNodes = append(sysNodes, gw.UniqueID)
 	}
@@ -547,6 +547,8 @@ func wireComponents(a *domain.Architecture, n *nodesContainer) *linksContainer {
 	)
 	a.ComposedOf("ecommerce-system-composition", "The E-Commerce Platform comprises its core services and databases.", n.System.UniqueID, sysNodes).
 		Data("internal", false)
+
+	// GUI-generated connection: new-connection-1767870276201
 
 	return lc
 }

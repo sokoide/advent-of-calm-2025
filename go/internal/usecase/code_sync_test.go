@@ -81,4 +81,3 @@ func TestCodeSyncUseCase_GenerateSVG(t *testing.T) {
 		t.Errorf("expected SVG %q, got %q", expectedSVG, got)
 	}
 }
-
