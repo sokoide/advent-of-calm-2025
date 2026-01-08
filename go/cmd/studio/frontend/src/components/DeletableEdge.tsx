@@ -39,12 +39,12 @@ const DeletableEdge = ({
         evt.stopPropagation();
 
         if (isProtected) {
-            alert(`この Relationship は Flow で参照されているため削除できません。\n\n参照元 Flow:\n- ${flowNames.join('\n- ')}`);
+            alert(`This Relationship is referenced in a Flow and cannot be deleted.\n\nReferenced Flows:\n- ${flowNames.join('\n- ')}`);
             return;
         }
 
         if (data?.onDelete) {
-            if (confirm('このRelationshipを削除しますか？')) {
+            if (confirm('Are you sure you want to delete this Relationship?')) {
                 data.onDelete(id);
             }
         }
@@ -74,7 +74,7 @@ const DeletableEdge = ({
                                 ? 'bg-gray-600 hover:bg-gray-500 text-gray-300 cursor-not-allowed'
                                 : 'bg-red-600 hover:bg-red-500 text-white'
                             }`}
-                        title={isProtected ? 'Flowで参照されているため削除不可' : 'Relationshipを削除'}
+                        title={isProtected ? 'Cannot delete: referenced in a Flow' : 'Delete Relationship'}
                     >
                         <X size={12} />
                     </button>
