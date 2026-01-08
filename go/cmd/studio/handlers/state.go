@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"path/filepath"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -11,8 +10,9 @@ import (
 
 // State holds shared state for all handlers.
 type State struct {
-	GoDir     string
-	StudioSvc usecase.StudioService
+	GoDir       string
+	StudioSvc   usecase.StudioService
+	SyncUseCase *usecase.CodeSyncUseCase
 
 	clients   map[*websocket.Conn]bool
 	clientsMu sync.Mutex
@@ -27,14 +27,13 @@ type State struct {
 	ContentMu sync.RWMutex
 }
 
-const dslRelativePath = "internal/usecase/ecommerce_architecture.go"
-
 // NewState creates a new handler state.
-func NewState(goDir string, studioSvc usecase.StudioService) *State {
+func NewState(goDir string, studioSvc usecase.StudioService, syncUseCase *usecase.CodeSyncUseCase) *State {
 	return &State{
-		GoDir:     goDir,
-		StudioSvc: studioSvc,
-		clients:   make(map[*websocket.Conn]bool),
+		GoDir:       goDir,
+		StudioSvc:   studioSvc,
+		SyncUseCase: syncUseCase,
+		clients:     make(map[*websocket.Conn]bool),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
@@ -84,9 +83,4 @@ func (s *State) GetContent() (goCode, d2Code, svg, jsonStr string) {
 	s.ContentMu.RLock()
 	defer s.ContentMu.RUnlock()
 	return s.LastContent.GoCode, s.LastContent.D2Code, s.LastContent.SVG, s.LastContent.JSON
-}
-
-// DSLPath returns the absolute path to the DSL file.
-func (s *State) DSLPath() string {
-	return filepath.Join(s.GoDir, dslRelativePath)
 }

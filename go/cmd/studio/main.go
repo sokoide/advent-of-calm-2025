@@ -17,6 +17,8 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/sokoide/advent-of-calm-2025/cmd/studio/handlers"
 	"github.com/sokoide/advent-of-calm-2025/internal/infra/ast"
+	"github.com/sokoide/advent-of-calm-2025/internal/infra/d2"
+	"github.com/sokoide/advent-of-calm-2025/internal/infra/filesystem"
 	"github.com/sokoide/advent-of-calm-2025/internal/infra/generator"
 	"github.com/sokoide/advent-of-calm-2025/internal/infra/repository"
 	"github.com/sokoide/advent-of-calm-2025/internal/usecase"
@@ -55,9 +57,12 @@ func run() error {
 
 	log.Printf("🚀 Starting Studio in: %s", goDir)
 	layoutRepo := repository.NewFSLayoutRepository(filepath.Join(goDir, "architectures"))
+	dslRepo := filesystem.NewFileSystemDSLRepository(filepath.Join(goDir, "internal/usecase/ecommerce_architecture.go"))
+	d2Renderer := d2.NewD2Renderer()
+	syncUseCase := usecase.NewCodeSyncUseCase(dslRepo, d2Renderer)
 	studioSvc := usecase.NewStudioService(layoutRepo, ast.GoASTSyncer{})
 
-	state = handlers.NewState(goDir, studioSvc)
+	state = handlers.NewState(goDir, studioSvc, syncUseCase)
 
 	// Initial DSL read
 	initialReadDSL()
@@ -103,7 +108,7 @@ func run() error {
 }
 
 func initialReadDSL() {
-	goCode, err := state.ReadGoDSL()
+	goCode, err := state.SyncUseCase.ReadDSL()
 	if err == nil {
 		state.SetContent(goCode, "", "", "")
 		log.Printf("📖 Initial DSL read success (%d bytes)", len(goCode))
@@ -179,7 +184,7 @@ func addWatchDirs(watcher *fsnotify.Watcher, root string) error {
 
 func regenerate() bool {
 	// Read Go source first
-	goCode, err := state.ReadGoDSL()
+	goCode, err := state.SyncUseCase.ReadDSL()
 	if err != nil {
 		log.Printf("❌ Failed to read Go DSL: %v", err)
 	} else {
@@ -214,7 +219,7 @@ func regenerateInProcess() bool {
 		d2Output = ""
 	}
 
-	svg := handlers.GenerateSVGFromD2(d2Output)
+	svg, _ := state.SyncUseCase.GenerateSVG(d2Output)
 	state.UpdateD2Content(d2Output, svg, jsonOutput)
 
 	log.Println("✅ Content updated (in-process)")
@@ -245,7 +250,7 @@ func regenerateWithGoRun() bool {
 		d2Out.Reset()
 	}
 
-	svg := handlers.GenerateSVGFromD2(d2Out.String())
+	svg, _ := state.SyncUseCase.GenerateSVG(d2Out.String())
 	state.UpdateD2Content(d2Out.String(), svg, jsonOut.String())
 
 	log.Println("✅ Content updated (go run)")

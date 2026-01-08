@@ -60,17 +60,19 @@ func (s *State) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 func (s *State) HandleClientUpdate(updateType, content string) {
 	switch updateType {
 	case "go":
-		if err := s.WriteGoDSL(content); err != nil {
+		if err := s.SyncUseCase.WriteDSL(content); err != nil {
 			log.Printf("Error writing Go file: %v", err)
 		}
 	case "d2":
 		log.Println("📝 D2 update received, generating SVG...")
 		s.ContentMu.Lock()
 		s.LastContent.D2Code = content
-		svg := GenerateSVGFromD2(content)
-		if svg != "" {
+		svg, err := s.SyncUseCase.GenerateSVG(content)
+		if err == nil && svg != "" {
 			s.LastContent.SVG = svg
 			log.Println("✅ SVG generated successfully")
+		} else if err != nil {
+			log.Printf("❌ SVG generation error: %v", err)
 		}
 		s.ContentMu.Unlock()
 		s.NotifyClients("refresh-svg")

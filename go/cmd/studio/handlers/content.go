@@ -21,7 +21,7 @@ func (s *State) ServeSVG(w http.ResponseWriter, r *http.Request) {
 	s.ContentMu.RUnlock()
 
 	if svg == "" && d2Code != "" {
-		svg = GenerateSVGFromD2(d2Code)
+		svg, _ = s.SyncUseCase.GenerateSVG(d2Code)
 		if svg != "" {
 			s.ContentMu.Lock()
 			s.LastContent.SVG = svg

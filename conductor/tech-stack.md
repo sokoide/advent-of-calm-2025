@@ -25,3 +25,6 @@
 ## Architecture & Patterns
 - **Clean Architecture**: Domain, Usecase, Infraの3層構造による責任の分離。
 - **Ports & Adapters**: Interfaceによる外部依存の抽象化。
+  - **DSL Repository**: ファイルシステムへの依存を抽象化（Go DSLファイルの読み書き）。
+  - **Diagram Renderer**: 外部描画エンジン（D2）の実行を抽象化（SVG生成）。
+  - **CodeSyncUseCase**: 双方向同期（D2 <-> Go DSL）ロジックの中核。
