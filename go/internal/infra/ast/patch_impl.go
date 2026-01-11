@@ -217,51 +217,6 @@ func (GoASTSyncer) ApplyPatch(src string, ops []domain.PatchOperation) (string, 
 		return "", err
 	}
 
-	// If there's a pending relationship to add, insert it into the source
-	if pendingRelationship.pending {
-		result = insertRelationshipIntoSource(
-			result,
-			pendingRelationship.id,
-			pendingRelationship.source,
-			pendingRelationship.target,
-			pendingRelationship.isInteracts,
-		)
-		pendingRelationship.pending = false
-	}
-
-	// If there's a pending flow to add, insert it into the source
-	if pendingFlow.pending {
-		result = insertFlowIntoSource(
-			result,
-			pendingFlow.id,
-			pendingFlow.name,
-			pendingFlow.desc,
-			pendingFlow.steps,
-		)
-		pendingFlow.pending = false
-	}
-
-	// If there's a pending composed-of to add, insert it into the source
-	if pendingComposedOf.pending {
-		result = insertComposedOfIntoSource(
-			result,
-			pendingComposedOf.id,
-			pendingComposedOf.containerID,
-			pendingComposedOf.childNodeIDs,
-		)
-		pendingComposedOf.pending = false
-	}
-
-	// If there's a pending control to add, insert it into the source
-	if pendingControl.pending {
-		result = insertControlIntoSource(
-			result,
-			pendingControl.id,
-			pendingControl.desc,
-		)
-		pendingControl.pending = false
-	}
-
 	return result, nil
 }
 
@@ -645,28 +600,41 @@ func updateRelationshipInAST(f *ast.File, relationshipID, property string, value
 	return nil
 }
 
-// addRelationshipToAST records a new Connect() call to be added.
-// Since AST insertion is complex, we use source code manipulation approach.
-// This function stores the relationship info in a global variable that will be
-// appended to the formatted source code at the end of ApplyPatch.
-var pendingRelationship struct {
-	id, source, target string
-	isInteracts        bool
-	pending            bool
-}
-
+// addRelationshipToAST adds a new Connect() or Interacts() call to the AST.
 func addRelationshipToAST(
 	f *ast.File,
 	fset *token.FileSet,
 	relationshipID, sourceNode, targetNode string,
 	isInteracts bool,
 ) error {
-	// Store the relationship for later source code insertion
-	pendingRelationship.id = relationshipID
-	pendingRelationship.source = sourceNode
-	pendingRelationship.target = targetNode
-	pendingRelationship.isInteracts = isInteracts
-	pendingRelationship.pending = true
+	fn := findFunctionInAST(f, []string{"wireComponents", "build"})
+	if fn == nil {
+		return fmt.Errorf("wireComponents or build function not found in AST")
+	}
+
+	receiverName := getReceiverName(fn, "a")
+	funcName := "Connect"
+	if isInteracts {
+		funcName = "Interacts"
+	}
+
+	desc := fmt.Sprintf("%s from %s to %s", funcName, sourceNode, targetNode)
+	newStmt := &ast.ExprStmt{
+		X: &ast.CallExpr{
+			Fun: &ast.SelectorExpr{
+				X:   ast.NewIdent(receiverName),
+				Sel: ast.NewIdent(funcName),
+			},
+			Args: []ast.Expr{
+				&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", relationshipID)},
+				&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", desc)},
+				&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", sourceNode)},
+				&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", targetNode)},
+			},
+		},
+	}
+
+	insertStmtBeforeReturn(fn, newStmt)
 
 	if isInteracts {
 		log.Printf("📝 Adding Interacts: %s from %s to %s", relationshipID, sourceNode, targetNode)
@@ -674,39 +642,6 @@ func addRelationshipToAST(
 		log.Printf("📝 Adding Connect: %s from %s to %s", relationshipID, sourceNode, targetNode)
 	}
 	return nil
-}
-
-// insertRelationshipIntoSource inserts a Connect() or Interacts() call into the Go source code.
-// It looks for the wireComponents function and inserts before "return lc".
-func insertRelationshipIntoSource(src, relationshipID, sourceNode, targetNode string, isInteracts bool) string {
-	// Generate the relationship line to insert
-	var relationshipLine string
-	if isInteracts {
-		relationshipLine = fmt.Sprintf(`
-	// GUI-generated interaction: %s
-	a.Interacts("%s", "Interaction from %s to %s", "%s", "%s")
-`, relationshipID, relationshipID, sourceNode, targetNode, sourceNode, targetNode)
-	} else {
-		relationshipLine = fmt.Sprintf(`
-	// GUI-generated connection: %s
-	a.Connect("%s", "Connection from %s to %s", "%s", "%s")
-`, relationshipID, relationshipID, sourceNode, targetNode, sourceNode, targetNode)
-	}
-
-	// Find "return lc" in wireComponents and insert before it
-	pattern := "\treturn lc\n"
-	insertPoint := strings.LastIndex(src, pattern)
-	if insertPoint == -1 {
-		pattern = "return lc"
-		insertPoint = strings.LastIndex(src, pattern)
-	}
-
-	if insertPoint == -1 {
-		log.Printf("Warning: Could not find insertion point in wireComponents")
-		return src
-	}
-
-	return src[:insertPoint] + relationshipLine + src[insertPoint:]
 }
 
 func updateLoopVariable(f *ast.File, varName string, delta int) error {
@@ -1100,55 +1035,57 @@ func isDefineFlowCallWithID(stmt ast.Stmt, flowID string) bool {
 	}
 }
 
-// addFlowToAST adds a new DefineFlow call to the source.
-// It inserts the code textually into wireComponents for simplicity.
+// addFlowToAST adds a new DefineFlow call to the AST.
 func addFlowToAST(f *ast.File, flowID, name, desc string, steps []string) error {
-	pendingFlow.id = flowID
-	pendingFlow.name = name
-	pendingFlow.desc = desc
-	pendingFlow.steps = steps
-	pendingFlow.pending = true
+	fn := findFunctionInAST(f, []string{"defineFlows", "build"})
+	if fn == nil {
+		return fmt.Errorf("defineFlows or build function not found in AST")
+	}
+
+	receiverName := getReceiverName(fn, "a")
+
+	// 1. Create DefineFlow call
+	defineFlowCall := &ast.CallExpr{
+		Fun: &ast.SelectorExpr{
+			X:   ast.NewIdent(receiverName),
+			Sel: ast.NewIdent("DefineFlow"),
+		},
+		Args: []ast.Expr{
+			&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", flowID)},
+			&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", name)},
+			&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", desc)},
+		},
+	}
+
+	// 2. Create Steps call
+	stepSpecs := make([]ast.Expr, 0, len(steps))
+	for _, stepID := range steps {
+		stepSpecs = append(stepSpecs, &ast.CompositeLit{
+			Type: &ast.SelectorExpr{
+				X:   ast.NewIdent("domain"),
+				Sel: ast.NewIdent("StepSpec"),
+			},
+			Elts: []ast.Expr{
+				&ast.KeyValueExpr{
+					Key:   ast.NewIdent("ID"),
+					Value: &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", stepID)},
+				},
+			},
+		})
+	}
+
+	stepsCall := &ast.CallExpr{
+		Fun: &ast.SelectorExpr{
+			X:   defineFlowCall,
+			Sel: ast.NewIdent("Steps"),
+		},
+		Args: stepSpecs,
+	}
+
+	insertStmtBeforeReturn(fn, &ast.ExprStmt{X: stepsCall})
 
 	log.Printf("📝 Adding Flow: %s", flowID)
 	return nil
-}
-
-var pendingFlow struct {
-	id, name, desc string
-	steps          []string
-	pending        bool
-}
-
-// insertFlowIntoSource inserts a DefineFlow call into the Go source code.
-// It inserts into wireComponents before "return lc".
-func insertFlowIntoSource(src string, flowID, name, desc string, steps []string) string {
-	stepsCode := ""
-	for _, stepID := range steps {
-		// Use quotes for ID as it's a string literal in the generated call
-		stepsCode += fmt.Sprintf("\t\t\tdomain.StepSpec{ID: \"%s\"},\n", stepID)
-	}
-
-	flowCode := fmt.Sprintf(`
-	// GUI-generated flow: %s
-	a.DefineFlow("%s", "%s", "%s").
-		Steps(
-%s		)
-`, flowID, flowID, name, desc, stepsCode)
-
-	// Find "return lc" in wireComponents and insert before it
-	pattern := "\treturn lc\n"
-	insertPoint := strings.LastIndex(src, pattern)
-	if insertPoint == -1 {
-		pattern = "return lc"
-		insertPoint = strings.LastIndex(src, pattern)
-	}
-
-	if insertPoint == -1 {
-		log.Printf("Warning: Could not find insertion point in wireComponents")
-		return src
-	}
-
-	return src[:insertPoint] + flowCode + src[insertPoint:]
 }
 
 // updateFlowInAST updates an existing DefineFlow call.
@@ -1248,60 +1185,47 @@ func updateFlowInAST(f *ast.File, flowID, name, desc string, steps []string) err
 	return nil
 }
 
-// --- ComposedOf helpers ---
-
-var pendingComposedOf struct {
-	id           string
-	containerID  string
-	childNodeIDs []string
-	pending      bool
-}
-
-// addComposedOfToAST adds a new ComposedOf relationship to the source.
-// It uses textual insertion for simplicity.
+// addComposedOfToAST adds a new ComposedOf relationship to the AST.
 func addComposedOfToAST(f *ast.File, id, containerID string, childNodeIDs []string) error {
 	if id == "" {
 		id = fmt.Sprintf("composed-%s", containerID)
 	}
-	pendingComposedOf.id = id
-	pendingComposedOf.containerID = containerID
-	pendingComposedOf.childNodeIDs = childNodeIDs
-	pendingComposedOf.pending = true
+
+	fn := findFunctionInAST(f, []string{"wireComponents", "build"})
+	if fn == nil {
+		return fmt.Errorf("wireComponents or build function not found in AST")
+	}
+
+	receiverName := getReceiverName(fn, "a")
+
+	// Build the node IDs slice: []string{"n1", "n2"}
+	elts := make([]ast.Expr, len(childNodeIDs))
+	for i, nid := range childNodeIDs {
+		elts[i] = &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", nid)}
+	}
+
+	newStmt := &ast.ExprStmt{
+		X: &ast.CallExpr{
+			Fun: &ast.SelectorExpr{
+				X:   ast.NewIdent(receiverName),
+				Sel: ast.NewIdent("ComposedOf"),
+			},
+			Args: []ast.Expr{
+				&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", id)},
+				&ast.BasicLit{Kind: token.STRING, Value: "\"Container relationship\""},
+				ast.NewIdent(containerID),
+				&ast.CompositeLit{
+					Type: &ast.ArrayType{Elt: ast.NewIdent("string")},
+					Elts: elts,
+				},
+			},
+		},
+	}
+
+	insertStmtBeforeReturn(fn, newStmt)
 
 	log.Printf("📝 Adding ComposedOf: %s (container: %s)", id, containerID)
 	return nil
-}
-
-// insertComposedOfIntoSource inserts a ComposedOf call into the Go source code.
-func insertComposedOfIntoSource(src, id, containerID string, childNodeIDs []string) string {
-	// Build the node IDs slice: []string{"n1", "n2"}
-	nodeLiterals := ""
-	for i, nid := range childNodeIDs {
-		if i > 0 {
-			nodeLiterals += ", "
-		}
-		nodeLiterals += fmt.Sprintf("%q", nid)
-	}
-
-	composedCode := fmt.Sprintf(`
-	// GUI-generated composed-of: %s
-	a.ComposedOf("%s", "Container relationship", %s, []string{%s})
-`, id, id, containerID, nodeLiterals)
-
-	// Find "return lc" and insert before it
-	pattern := "\treturn lc\n"
-	insertPoint := strings.LastIndex(src, pattern)
-	if insertPoint == -1 {
-		pattern = "return lc"
-		insertPoint = strings.LastIndex(src, pattern)
-	}
-
-	if insertPoint == -1 {
-		log.Printf("Warning: Could not find insertion point for ComposedOf")
-		return src
-	}
-
-	return src[:insertPoint] + composedCode + src[insertPoint:]
 }
 
 // deleteComposedOfFromAST removes a ComposedOf call from the AST.
@@ -1376,19 +1300,29 @@ func isComposedOfCallWithID(stmt ast.Stmt, composedOfID string) bool {
 	return val == composedOfID
 }
 
-// --- Control helpers ---
-
-var pendingControl struct {
-	id      string
-	desc    string
-	pending bool
-}
-
-// addControlToAST adds a new AddControl call to the source.
+// addControlToAST adds a new AddControl call to the AST.
 func addControlToAST(f *ast.File, controlID, desc string) error {
-	pendingControl.id = controlID
-	pendingControl.desc = desc
-	pendingControl.pending = true
+	fn := findFunctionInAST(f, []string{"addGlobalControls", "build", "defineNodes"})
+	if fn == nil {
+		return fmt.Errorf("suitable function for AddControl not found in AST")
+	}
+
+	receiverName := getReceiverName(fn, "arch")
+
+	newStmt := &ast.ExprStmt{
+		X: &ast.CallExpr{
+			Fun: &ast.SelectorExpr{
+				X:   ast.NewIdent(receiverName),
+				Sel: ast.NewIdent("AddControl"),
+			},
+			Args: []ast.Expr{
+				&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", controlID)},
+				&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", desc)},
+			},
+		},
+	}
+
+	insertStmtBeforeReturn(fn, newStmt)
 
 	log.Printf("📝 Adding Control: %s", controlID)
 	return nil
@@ -1466,29 +1400,6 @@ func isAddControlCallWithID(stmt ast.Stmt, controlID string) bool {
 
 	val := strings.Trim(lit.Value, "\"")
 	return val == controlID
-}
-
-// insertControlIntoSource inserts an AddControl call into the Go source code.
-func insertControlIntoSource(src, controlID, desc string) string {
-	controlCode := fmt.Sprintf(`
-	// GUI-generated control: %s
-	arch.AddControl("%s", "%s")
-`, controlID, controlID, desc)
-
-	// Find "return lc" and insert before it
-	pattern := "\treturn lc\n"
-	insertPoint := strings.LastIndex(src, pattern)
-	if insertPoint == -1 {
-		pattern = "return lc"
-		insertPoint = strings.LastIndex(src, pattern)
-	}
-
-	if insertPoint == -1 {
-		log.Printf("Warning: Could not find insertion point for Control")
-		return src
-	}
-
-	return src[:insertPoint] + controlCode + src[insertPoint:]
 }
 
 // updateComposedOfInAST updates a ComposedOf call in the AST (description and/or child nodes).
@@ -1912,4 +1823,47 @@ func variableReferenceMatches(expr ast.Expr, varName string, nodeID string) bool
 		}
 	}
 	return false
+}
+
+// --- AST Helpers ---
+
+func findFunctionInAST(f *ast.File, nameParts []string) *ast.FuncDecl {
+	for _, decl := range f.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil {
+			continue
+		}
+		nameLower := strings.ToLower(fn.Name.Name)
+		for _, part := range nameParts {
+			if strings.Contains(nameLower, strings.ToLower(part)) {
+				return fn
+			}
+		}
+	}
+	return nil
+}
+
+func getReceiverName(fn *ast.FuncDecl, defaultName string) string {
+	if fn.Type.Params != nil && len(fn.Type.Params.List) > 0 {
+		for _, p := range fn.Type.Params.List {
+			if len(p.Names) > 0 {
+				return p.Names[0].Name
+			}
+		}
+	}
+	return defaultName
+}
+
+func insertStmtBeforeReturn(fn *ast.FuncDecl, stmt ast.Stmt) {
+	for i, s := range fn.Body.List {
+		if _, ok := s.(*ast.ReturnStmt); ok {
+			newList := make([]ast.Stmt, 0, len(fn.Body.List)+1)
+			newList = append(newList, fn.Body.List[:i]...)
+			newList = append(newList, stmt)
+			newList = append(newList, fn.Body.List[i:]...)
+			fn.Body.List = newList
+			return
+		}
+	}
+	fn.Body.List = append(fn.Body.List, stmt)
 }
