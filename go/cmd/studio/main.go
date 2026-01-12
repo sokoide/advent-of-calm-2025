@@ -20,6 +20,7 @@ import (
 	"github.com/sokoide/advent-of-calm-2025/internal/infra/d2"
 	"github.com/sokoide/advent-of-calm-2025/internal/infra/filesystem"
 	"github.com/sokoide/advent-of-calm-2025/internal/infra/generator"
+	"github.com/sokoide/advent-of-calm-2025/internal/infra/parser"
 	"github.com/sokoide/advent-of-calm-2025/internal/infra/repository"
 	"github.com/sokoide/advent-of-calm-2025/internal/usecase"
 )
@@ -59,8 +60,13 @@ func run() error {
 	layoutRepo := repository.NewFSLayoutRepository(filepath.Join(goDir, "architectures"))
 	dslRepo := filesystem.NewFileSystemDSLRepository(filepath.Join(goDir, "internal/usecase/ecommerce_architecture.go"))
 	d2Renderer := d2.NewD2Renderer()
-	syncUseCase := usecase.NewCodeSyncUseCase(dslRepo, d2Renderer)
-	studioSvc := usecase.NewStudioService(layoutRepo, ast.GoASTSyncer{})
+
+	// Use infrastructure implementations
+	richD2Parser := parser.RichD2Parser{}
+	astSyncer := ast.GoASTSyncer{}
+
+	syncUseCase := usecase.NewCodeSyncUseCase(dslRepo, d2Renderer, richD2Parser, astSyncer)
+	studioSvc := usecase.NewStudioService(layoutRepo, astSyncer)
 
 	state = handlers.NewState(goDir, studioSvc, syncUseCase)
 

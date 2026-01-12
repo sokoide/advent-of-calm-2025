@@ -135,7 +135,7 @@ make studio-ui
 
 | Command              | Description                                                |
 | :------------------- | :--------------------------------------------------------- |
-| **`make format`**    | Formats Go code with 120-character limit using `golines`.  |
+| **`make format`**    | Formats Go code using standard `gofmt`.  |
 | **`make check`**     | Verifies design rules (Ownership, Backup, etc.).           |
 | **`make validate`**  | Validates generated JSON against CALM schema.              |
 | **`make diff-arch`** | Shows semantic differences between architectures in color. |

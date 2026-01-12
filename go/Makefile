@@ -3,9 +3,9 @@
 # Default target
 help:
 	@echo "Available commands:"
-	@echo "  make setup     - Install required tools (golines)"
+	@echo "  make setup     - Install required tools"
 	@echo "  make build     - Build the Go program and generate executable"
-	@echo "  make format    - Format source code using golines (120 char limit)"
+	@echo "  make format    - Format source code using gofmt"
 	@echo "  make run       - Run the program and output architecture JSON"
 	@echo "  make validate  - Generate architecture and run CALM validation"
 	@echo "  make check     - Run Go DSL validation rules"
@@ -24,17 +24,15 @@ help:
 
 # Setup: Install required tools
 setup:
-	go install github.com/segmentio/golines@latest
 	@echo "Install D2: brew install d2"
 
 # Build: Generate executable
 build:
 	go build -o ../arch-gen ./cmd/arch-gen
 
-# Format: Apply 120 character limit using golines
+# Format: Standard gofmt
 format:
-	@command -v golines >/dev/null 2>&1 || (echo "golines not found. Run make setup." && exit 1)
-	golines -w -m 120 --base-formatter gofmt .
+	gofmt -w .
 
 # Run: Output JSON to stdout
 run:

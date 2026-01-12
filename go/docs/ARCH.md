@@ -1,183 +1,274 @@
-# CALM Studio Architecture Overview
+# CALM Studio Architecture Guide (Go DSL & AST Sync)
 
-CALM Studio is a bidirectional sync-based IDE/visualizer for intuitive architecture modeling using FINOS CALM (Common Architecture Language Model). It treats the Go DSL as the "Single Source of Truth," where UI operations are reflected in the Go code via AST synchronization. The frontend is built on three principles: "Separation of Business Rules," "Centralization of Side Effects," and "Thin UI."
+This document details the architecture for achieving bidirectional synchronization between CALM Studio (React Flow) and the Go DSL (codebase), specifically focusing on **AST (Abstract Syntax Tree)** manipulation and the **Patch** system.
 
-## 1. System Diagram
+## 1. Overall Architecture Overview
 
-The frontend (React/TS) and backend (Go) are tightly coupled to synchronize the Go DSL code with the diagrams on the UI.
+CALM Studio treats the architecture definition written in Go (Go DSL) as the "Source of Truth" while enabling intuitive editing via the GUI. To achieve this, the following bidirectional synchronization flow is implemented.
 
-```mermaid
-graph LR
-    subgraph Frontend [React + TypeScript]
-        RF[ReactFlow: Diagram]
-        ME[Monaco Editor: Code]
-        UI[Presentation: App/Components]
-        UC_FE[UseCase: StudioUseCase]
-        INF_FE[Infra: API/WS Client]
-        DOM_FE[Domain: Model/Rules]
-    end
+### Flow 1: Go DSL → GUI (Rendering)
+1.  **Build**: `internal/infra/generator` executes the Go DSL (`EcommerceBuilder.Build()`) to construct the `domain.Architecture` model in memory.
+2.  **Render**: Converts the model into JSON format and sends it to Studio (Frontend).
+3.  **Display**: React Flow interprets the JSON and renders nodes and edges.
 
-    subgraph Backend [Go Server]
-        HTTP[HTTP API Handler]
-        WS_S[WebSocket Server]
-        FSW[File Watcher: fsnotify]
-        UC[UseCase: StudioService]
-        AST[Infra: AST Syncer]
-        GEN[Arch-Gen Executor]
-        D2[D2 CLI]
-        LYT_REPO[Infra: Layout Repo]
-    end
+### Flow 2: GUI → Go DSL (Patching)
+1.  **Action**: User performs an action in the GUI (e.g., rename node, move, delete).
+2.  **Patch**: The action details are sent to the backend as a `domain.PatchOperation` struct (JSON).
+3.  **AST Sync**: `internal/infra/ast.GoASTSyncer` reads the Go source file and parses it using the **`go/ast`** package.
+4.  **Rewrite**: Directly rewrites the AST (Abstract Syntax Tree) based on the patch content.
+5.  **Save**: Formats the rewritten AST as Go source code and writes it back to the file.
 
-    subgraph Filesystem [Storage]
-        DSL[Go DSL: ecommerce_architecture.go]
-        LYT[Layout JSON: architectures/layout/*.layout.json]
-    end
+---
 
-    ME <--> DSL
-    RF <--> LYT
-    UI --> UC_FE
-    UC_FE --> INF_FE
-    UC_FE --> DOM_FE
-    INF_FE --> HTTP
-    HTTP --> UC
-    UC --> AST
-    UC --> LYT_REPO
-    AST -- "Rewrite" --> DSL
-    DSL -- "Watch" --> FSW
-    FSW -- "Trigger" --> GEN
-    GEN -- "Exec" --> DSL
-    GEN -- "Notify" --> WS_S
-    WS_S -- "Refresh" --> WS_C
-    WS_C -- "Fetch Content" --> HTTP
+## 2. Patch System Structure
+
+Change requests from the GUI are defined as generic patch operations.
+
+### `domain.PatchOperation`
+
+All change operations are represented by the following structure (`internal/domain/patch.go`).
+
+```go
+type PatchOperation struct {
+    Type           PatchType    // Operation type (e.g., "update-node", "add-relationship")
+    NodeID         string       // CALM ID of the target node
+    Origin         *PatchOrigin // Location info in source code (line number, etc.)
+    Property       string       // Property name to change (e.g., "name", "description")
+    Value          interface{}  // New value
+    // ... Other fields depending on operation type (SourceNode, TargetNode, etc.)
+}
 ```
 
----
+### Main Operation Types (`PatchType`)
 
-## 2. Backend Architecture (Go)
-
-The backend acts not just as a simple API server, but as an engine for analyzing, manipulating, and executing Go code.
-
-### Key Components
-
-- **Server (`cmd/studio/main.go`)**: An API/WS server using `gorilla/websocket` and the standard `http` package.
-- **Local Agent (`cmd/arch-agent`)**: An HTTP bridge to invoke local Go/D2 tools from the browser.
-- **StudioService (`internal/usecase`)**: Orchestration of layout management and AST synchronization.
-- **AST Syncer (`internal/infra/ast`)**: Directly rewrites the DSL files at the source level using `go/ast`, `go/parser`, and `go/format`. Node additions/deletions/updates in the UI are reflected in the Go code.
-- **Layout Repository (`internal/infra/repository`)**: Saves layouts (relative coordinates + parentMap) in `architectures/layout/*.layout.json`.
-- **Generator**: Executes `go run ./cmd/arch-gen` as a subprocess to generate CALM JSON/D2 from the DSL.
-- **D2 CLI**: Converts D2 DSL to SVG (`d2 - -`).
-- **File Watcher**: Monitors changes in `internal/`, etc., using `fsnotify` and automatically updates the diagram even upon manual updates.
-
-### Main API Endpoints
-
-- `GET /content`: Returns the current Go code, CALM JSON, D2 DSL, and SVG image.
-- `POST /sync-ast`: Reflects UI operations (add/delete/update nodes) into the Go code.
-- `GET/POST /layout`: Persists ReactFlow node position information.
-- `POST /update`: Saves direct edits from the code editor to the file.
-- `GET /svg`: Generates and returns SVG only when necessary (common to Local Agent/Server).
-
-### Role of the Local Agent
-The Local Agent is a lightweight HTTP server running on `localhost`, acting as a bridge to execute local Go/D2 from the browser. It can be started alongside Studio with `make studio`, and its logs are prefixed with `agent:`.
-
-### Clean Arch Compliance and Exceptions (Go side)
-**Conclusion**: While the primary separation of Domain/UseCase/Infra is achieved, some "exceptions" remain where logic is pushed into the Framework for implementation and operational convenience.
-
-- **Compliant Points**
-  - **Port Definitions in Domain**: `ASTSyncer` / `LayoutRepository` are defined in `internal/domain/ports.go`, isolating external details.
-  - **Aggregated Procedures in UseCase**: `internal/usecase/studio.go` orchestrates layout saving and AST synchronization.
-  - **Infra Implements Ports**: `internal/infra/ast` and `internal/infra/repository` handle concrete implementations.
-
-- **Exceptions (Violations maintained for now)**
-  - **I/O and Generation in Framework**: `cmd/studio/main.go` directly handles `go run` / `d2` execution and file I/O.
-  - **DSL Updates in Framework**: `applyD2ChangesToGo` contains logic to update the Go DSL using regular expressions.
-
-- **Reasons for Exceptions (Pragmatic Reasons)**
-  - Studio is a development support tool, and the **execution environment is CLI-oriented** and changes rapidly.
-  - Processes calling external programs like `go run` / `d2` have a **high frequency of adjustment and are easier to manage in one place**.
-  - The UI/Sync features are still evolving, and **excessive decoupling might slow down the development speed**.
-
-**Policy**: Maintain the separation level shown here in the future and avoid over-engineering the decoupling.  
-The reason is to prioritize speed and operability for tool development, while keeping exceptions understood and minimized.
+| Type | Description | Required Parameters |
+| :--- | :--- | :--- |
+| `add-node` | Adds a new node definition | `NodeID`, `NodeName`, `NodeTypeName` |
+| `update-node` | Modifies properties of an existing node | `NodeID` or `Origin`, `Property`, `Value` |
+| `delete-node` | Deletes a node definition | `NodeID` or `Origin` |
+| `add-relationship` | Adds `Connect` / `Interacts` | `NodeID`, `SourceNode`, `TargetNode` |
+| `update-relationship` | Modifies relationship properties | `NodeID`, `Property`, `Value` |
+| `add-control` | Adds `AddControl` | `ControlID`, `ControlDesc` |
 
 ---
 
-## 3. Frontend Architecture (TypeScript/React)
+## 3. AST (Abstract Syntax Tree) Manipulation Details
 
-A modern SPA environment built with Vite + React + Tailwind CSS.
+The `internal/infra/ast` package handles the core AST operations. Instead of regex-based replacement, it parses and manipulates the Go syntax structure, enabling robust rewriting.
 
-### Key Libraries
+### 3.1 Identifying Nodes (`Find`)
 
-- **ReactFlow**: Diagram rendering and node manipulation.
-- **Monaco Editor (`@monaco-editor/react`)**: A VS Code-like code editing experience.
-- **Dagre**: Automatic layout calculation for diagrams.
-- **Lucide React**: UI icons.
+To identify a node definition (`a.DefineNode(...)`) in the Go DSL, the following strategies are used:
 
-### Clean Arch Compliance and Exceptions (TypeScript side)
-**Conclusion**: Instead of a "full multi-layered" approach, the structure is integrated into three principles that are highly practical for React. Boundaries are clear, but some parts are reasonably simplified for UI-centric needs.
+1.  **Line Number (Priority)**: If `Origin.Line` is provided by the frontend, the `DefineNode` call on that line is identified.
+2.  **ID Search (Fallback)**: If no line number is present, the AST is searched for a `DefineNode` call where the first argument (ID string literal) matches `NodeID`.
 
-- **Compliant Points (Integration of 3 Principles)**
-  1. **Separation of Business Rules from UI**
-     - **Implementation**: Calculation and comparison of CALM parent-child relationships are centralized in `src/domain/` (`buildParentMap`, `parentMapEquals`).
-     - **Reason**: By extracting pure logic that does not depend on the UI lifecycle, it becomes easier to reuse, test, and modify.
-  2. **Encapsulation of Side Effects**
-     - **Implementation**: HTTP/WS are centralized in `src/infra/`, and call procedures are centralized in `src/usecase/`.
-     - **Reason**: Eliminating external I/O from the UI allows changes to communication or synchronization procedures to be consolidated in one place.
-  3. **Thin UI as an Adapter**
-     - **Implementation**: `App.tsx` is limited to screen state, event wiring, and rendering, delegating data fetching and updates to the UseCase.
-     - **Reason**: Since the UI is an area of frequent change, the impact of adding features or changing designs can be minimized.
-
-- **Exceptions (Intentional Simplification)**
-  - **Strict Port/Adapter Separation Not Adopted**: Prioritized development speed over strict DI/Port patterns in React.
-  - **State Integration Remains in UI**: Keeping state aggregation in `App.tsx` is a decision aligned with React's state management characteristics.
-
-**Policy**: Maintain the separation level of the "3 Principles" and avoid strict multi-layering in the future.  
-The reason is to balance React development speed with operability, as further decomposition is judged to have higher costs than benefits.
-
-### Synchronization Mechanism
-
-1. **Initial Load**: Fetches all data from `/content` and converts CALM JSON to ReactFlow format via `transformToReactFlow`.
-2. **Layout/Grouping**:
-   - Layouts are saved as relative coordinates, and parent-child relationships are recorded in `parentMap`.
-   - When the `composed-of` relationship changes, the entire layout is automatically recalculated using Auto Layout.
-3. **Real-time Sync**:
-   - When a file is changed on the backend, a `refresh` notification is sent via WebSocket, and the frontend refetches the data.
-   - UI operations call `sync-ast` via the `usecase`, updating the Go files on the backend.
-4. **Multi-Tab View**:
-   - `Merged`: Split-view of code and diagram (IDE style).
-   - `D2 Diagram`: Full-width display of the D2 SVG with zoom/pan capabilities.
-
----
-
-## 4. Synchronization Sequence (During UI Operation)
-
-Interaction flow between the frontend and backend when a node is added on the UI.
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant RF as ReactFlow (UI)
-    participant API as Backend API
-    participant AST as AST Syncer
-    participant DSL as Go DSL File
-    participant FSW as File Watcher
-    participant GEN as arch-gen
-
-    User->>RF: Add Node
-    RF->>API: POST /sync-ast (Action: add)
-    API->>AST: ApplyNodeAction()
-    AST->>DSL: Parse, rewrite, and save Go source
-    DSL-->>FSW: File Write Event
-    FSW->>GEN: Trigger regeneration (go run)
-    GEN->>DSL: Execute to generate CALM JSON
-    GEN-->>API: Done
-    API->>RF: WebSocket "refresh" notification
-    RF->>API: GET /content (Fetch latest data)
-    RF-->>User: Diagram updates automatically
+```go
+// internal/infra/ast/patch_impl.go (Conceptual Code)
+ast.Inspect(file, func(n ast.Node) bool {
+    call, ok := n.(*ast.CallExpr)
+    // Find DefineNode function call
+    if isDefineNode(call) {
+        // Check if argument ID matches
+        if matchID(call.Args[0], targetID) {
+            found = call
+            return false
+        }
+    }
+    return true
+})
 ```
 
-## 5. Tips for Developers
+### 3.2 Updating Properties (`Update`)
 
-- **Modifying Go DSL**: `internal/usecase/ecommerce_architecture.go` is the target for synchronization.
-- **Saving Layout**: Dragging nodes saves relative coordinates + `parentMap` to `architectures/layout/*.layout.json`.
-- **Changing Parent-Child Relationships**: When the `composed-of` relationship changes, nodes are repositioned using global Auto Layout.
-- **Auto-formatting**: When code is rewritten on the backend, `go/format` is applied to maintain code consistency.
+Rewrites the arguments of the identified `*ast.CallExpr` (function call node).
+
+*   **Basic Arguments**: `Name` (3rd arg) and `Description` (4th arg) are updated by accessing the `call.Args` index and replacing the `*ast.BasicLit`.
+*   **Functional Options**: For option arguments like `domain.WithOwner(...)`, the variadic argument part (`call.Args[4:]`) is scanned to find and update the matching function call.
+
+### 3.3 Adding Nodes (`Add`)
+
+When adding a new node, an appropriate insertion point (function) is sought.
+
+1.  **Target Function**: Searches for functions (`*ast.FuncDecl`) where nodes are defined, such as the `Build` method or `defineNodes` function, by name.
+2.  **Statement Construction**: Programmatically constructs the AST (`*ast.ExprStmt`) representing the new `DefineNode` call.
+3.  **Insertion**: Inserts the new statement at the end of the function's `Body.List` (statement list) or immediately before the `return` statement.
+
+### 3.4 Deletion and Cascading (`Delete`)
+
+Simple line deletion is sometimes insufficient for node deletion.
+
+1.  **Identify Variable Name**: If assigned to a variable like `nc.OrderSvc = a.DefineNode(...)`, that variable name (`nc.OrderSvc`) is identified.
+2.  **Delete Definition**: Removes the statement containing `DefineNode` from the AST.
+3.  **Delete Dependencies (Cascade)**: Searches for other locations using the identified variable name (`nc.OrderSvc`) (e.g., `nc.OrderSvc.ConnectTo(...)` or `dependencies` metadata) and deletes them in a chain. This prevents "orphan references" that would cause compilation errors.
+
+### 3.5 Visualization of AST Structure and Patching Process (Mermaid)
+
+Visually explains to developers maintaining the AST how the Go DSL maps to the AST and how the patching process works.
+
+#### Correspondence between Go DSL and AST
+
+Shows how the following Go DSL code is represented in the AST.
+
+```go
+nc.OrderSvc = a.DefineNode("order-service", domain.Service, "Order Service", "Handles orders")
+```
+
+```mermaid
+graph TD
+    File["ast.File"] --> Decls["Decls: []ast.Decl"]
+    Decls --> FuncDecl["ast.FuncDecl: Build()"]
+    FuncDecl --> Body["Body: *ast.BlockStmt"]
+    Body --> StmtList["List: []ast.Stmt"]
+    StmtList --> AssignStmt["ast.AssignStmt"]
+
+    AssignStmt -- LHS --> IdentVar["ast.Ident: nc.OrderSvc"]
+    AssignStmt -- RHS --> CallExpr["ast.CallExpr"]
+
+    CallExpr -- Fun --> SelExpr["ast.SelectorExpr"]
+    SelExpr -- X --> IdentRecv["ast.Ident: a"]
+    SelExpr -- Sel --> IdentMethod["ast.Ident: DefineNode"]
+
+    CallExpr -- Args[0] --> ArgID["ast.BasicLit: order-service"]
+    CallExpr -- Args[1] --> ArgType["ast.SelectorExpr: domain.Service"]
+    CallExpr -- Args[2] --> ArgName["ast.BasicLit: Order Service"]
+```
+
+#### AST Patching Flow (`ApplyPatch`)
+
+The process flow from receiving a patch request to parsing/modifying the AST and saving the file.
+
+```mermaid
+flowchart TD
+    Start([Patch Request]) --> Parse[Parse Source to AST]
+    Parse --> PatchLoop{Iterate Ops}
+
+    PatchLoop -- Add Node --> FindFunc[Find Target Function]
+    FindFunc --> CreateStmt[Create AST Stmt]
+    CreateStmt --> InsertStmt[Insert into Body.List]
+
+    PatchLoop -- Update Node --> Inspect[ast.Inspect / Traverse]
+    Inspect --> Match{Match Target?}
+    Match -- Yes --> Modify[Update ast.BasicLit / Args]
+    Match -- No --> Continue[Continue Traversal]
+
+    PatchLoop -- Delete Node --> FindStmt[Find Statement]
+    FindStmt --> Remove[Remove from Slice]
+    Remove --> Cascade[Find & Remove References]
+
+    PatchLoop -- Next Op --> PatchLoop
+    PatchLoop -- Done --> Format[go/format: AST to Source]
+    Format --> Save[Save to File]
+```
+
+### 3.6 Practical Examples of Go DSL to AST Conversion
+
+### Example 1: Node Definition (`Node`)
+
+Explains how a simple CALM model code is actually recognized as a combination of AST nodes. This guides developers on which types (`*ast.Xxx`) to manipulate when implementing a patcher.
+
+**Target Go Code:**
+```go
+// Simple service definition
+srv := a.DefineNode("my-service", domain.Service, "My Service", "A simple service")
+```
+
+**Interpretation in AST:**
+
+This single line of code is parsed as an `*ast.AssignStmt` (Assignment Statement), and the function call on the right-hand side has a detailed tree structure.
+
+| Code Element | AST Node Type | Description | Example Patch Operation |
+| :--- | :--- | :--- | :--- |
+| `srv := ...` | `*ast.AssignStmt` | The entire assignment statement. Has `Lhs` (Left Hand Side) and `Rhs`. | Identify variable name (`srv`) to use for dependency deletion. |
+| `srv` | `*ast.Ident` | Identifier (variable name). | Rename variable. |
+| `a.DefineNode(...)` | `*ast.CallExpr` | Function call expression. Has `Fun` (Function) and `Args` (Arguments). | **Most Important**. Rewrite contents of `Args` to update properties. |
+| `a.DefineNode` | `*ast.SelectorExpr` | Format of `X.Sel`. `X`=`a` (Ident), `Sel`=`DefineNode` (Ident). | Check name to distinguish from other calls (e.g., `ConnectTo`). |
+| `"my-service"` | `*ast.BasicLit` | Basic literal (string). `Kind=token.STRING`. | Modify `Value` field to change ID. |
+| `domain.Service` | `*ast.SelectorExpr` | Package-qualified identifier. | Replace when changing node type. |
+
+**AST Traversal Image:**
+
+When you want to "update the name" in a patch process, the `ast.Inspect` function performs a depth-first search of the tree and visits nodes as follows:
+
+1.  Discover `*ast.AssignStmt`.
+2.  Reach `*ast.CallExpr` (`DefineNode`) on the Right Hand Side (`Rhs[0]`).
+3.  Confirm function name is "DefineNode".
+4.  Check 1st argument (`Args[0]`) `*ast.BasicLit` → If value is `"my-service"`, target confirmed!
+5.  Rewrite 3rd argument (`Args[2]`) `*ast.BasicLit` (`"My Service"`) to the new value.
+
+In this way, Go code is treated not just as text, but as a manipulate-able **object tree**.
+
+### Example 2: Relationship and Method Chaining (`Relationship`)
+
+Method chaining (`.Function().Function()`) is represented in the AST as "nested function calls". The last method call becomes the top (outermost) of the AST tree.
+
+**Target Go Code:**
+```go
+// Connection definition and details
+nc.API.ConnectTo(nc.Svc, "Calls Service").Via("client", "api").Is("internal")
+```
+
+**Interpretation in AST (Nested Structure):**
+
+This line is an `*ast.ExprStmt` (Expression Statement), but the `*ast.CallExpr` inside has a layered structure like an onion.
+
+| Code Element | AST Node Type | Structural Position | Description |
+| :--- | :--- | :--- | :--- |
+| `.Is("internal")` | `*ast.CallExpr` | **Outermost** | `Fun.X` points to the `Via(...)` call. |
+| `.Via(...)` | `*ast.CallExpr` | **Middle** | Receiver (`X`) of `Is`. `Fun.X` points to `ConnectTo(...)`. |
+| `.ConnectTo(...)` | `*ast.CallExpr` | **Innermost** | The root connection definition. `Fun.X` is `nc.API` (Ident/Selector). |
+
+**Patch Search Logic:**
+When updating a relationship, search from the outside in, "peeling" the layers:
+
+1.  Check if current node is a property setting method like `Is` or `Via`.
+2.  If so, move to its receiver (`call.Fun.X`) and continue search.
+3.  When `ConnectTo` (or `Interacts`) is reached, check/update ID or target node.
+
+### Example 3: Interface Definition (`Interface`)
+
+Interface definitions also use method chaining, but care is needed with numeric literals.
+
+**Target Go Code:**
+```go
+// Interface definition
+srv.Interface("http", "REST").SetPort(8080)
+```
+
+**Interpretation in AST:**
+
+| Code Element | AST Node Type | Description | Example Patch Operation |
+| :--- | :--- | :--- | :--- |
+| `.SetPort(8080)` | `*ast.CallExpr` | Outermost call. | Change port number. |
+| `8080` | `*ast.BasicLit` | `Kind=token.INT` (Integer literal). | `Value` is the string "8080", but type must be treated as INT. |
+| `.Interface(...)` | `*ast.CallExpr` | Receiver of `SetPort`. | Change ID ("http") or protocol ("REST"). |
+
+**Note:**
+In Go AST, integers are also held as string types (`"8080"`) in the `Value` field. When updating the value, you must convert it to a string using `strconv.Itoa(newPort)` etc.
+
+---
+
+## 4. Developer Guide
+
+### Adding a New Patch Operation
+
+1.  **`domain/patch.go`**: Add a new `PatchType` constant and necessary fields to the `PatchOperation` struct.
+2.  **`infra/ast/patch_impl.go`**: Add a new case to the switch statement in the `ApplyPatch` method.
+3.  **Implement AST Logic**: Implement helper functions (`addXxxToAST`, `updateXxxInAST`) to find specific function calls as needed.
+    *   Hint: Existing `addRelationshipToAST` and `updateNodePropertyInAST` serve as good references.
+
+### Debugging AST Operations
+
+If AST operations are not working as intended, check the following:
+
+*   **Function Name/Receiver Name**: Has the DSL code structure changed (e.g., `a.DefineNode` became `arch.DefineNode`)? The current logic attempts to resolve variable names dynamically, but there may be unexpected patterns.
+*   **Imports**: When adding a new type (e.g., `domain.NewRequirement`), `go/ast` does not automatically add `import` statements. The current implementation assumes the existing `domain` package is imported when generating `domain.Xxx`.
+
+### Limitations
+
+*   **Complex Logic**: Changes to node definitions inside loops (`for`) or conditionals (`if`) have some limitations (loop variable changes are supported, but parsing complex control flow is not fully supported).
+*   **Formatting**: Since `go/format` is used, comment positions may shift unintentionally.
+
+---
+
+> **Note**: This architecture is based on the principle that "Code is the Source of Truth". The GUI acts merely as a code editor, and all changes are ultimately reduced to compilable Go code.
