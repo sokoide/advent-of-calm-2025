@@ -5,7 +5,7 @@
 ## 1. Go Development Standards ($go-master)
 - **Idiomatic Go**: 標準ライブラリを優先し、明確で読みやすいコードを記述します。
 - **Functional Options Pattern**: 複雑な構造体（Node, Relationship等）の初期化には、拡張性と可読性に優れたFunctional Optionsを使用します。
-- **Strict Formatting**: `golines` を使用し、120文字の行制限を遵守します。
+- **Formatting**: `gofmt` を使用し、Go の標準的な規約に従って整形します。
 - **Error Handling**: センチネルエラーやカスタムエラー型を適切に使用し、コンテキスト情報を付与して上位層へ伝播させます。
 
 ## 2. Clean Architecture Standards ($ca-master)

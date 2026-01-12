@@ -134,73 +134,38 @@ func UpdateNodeNameInAST(f *ast.File, nodeID, newName string) error {
 
 // AddNodeInAST appends a new DefineNode call to the build or defineNodes function in the AST.
 func AddNodeInAST(f *ast.File, nodeID, nodeType, name, desc string) error {
-	for _, decl := range f.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok {
-			continue
-		}
-
-		// Target Build... or defineNodes functions
-		nameLower := strings.ToLower(fn.Name.Name)
-		if !strings.Contains(nameLower, "build") && !strings.Contains(nameLower, "definenodes") {
-			continue
-		}
-
-		// Determine receiver name (e.g., 'arch' or 'a')
-		receiverName := "arch"
-		if fn.Type.Params != nil && len(fn.Type.Params.List) > 0 {
-			for _, p := range fn.Type.Params.List {
-				if len(p.Names) > 0 {
-					receiverName = p.Names[0].Name
-					break
-				}
-			}
-		}
-
-		// Create type expression from nodeType parameter
-		// Use domain.Service, domain.Database, etc.
-		typeExpr := &ast.SelectorExpr{
-			X:   ast.NewIdent("domain"),
-			Sel: ast.NewIdent(nodeType),
-		}
-
-		// Create: <receiver>.DefineNode("id", <Type>, "name", "desc")
-		newStmt := &ast.ExprStmt{
-			X: &ast.CallExpr{
-				Fun: &ast.SelectorExpr{
-					X:   ast.NewIdent(receiverName),
-					Sel: ast.NewIdent("DefineNode"),
-				},
-				Args: []ast.Expr{
-					&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", nodeID)},
-					typeExpr,
-					&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", name)},
-					&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", desc)},
-				},
-			},
-		}
-
-		// Insert before return if exists, otherwise append
-		inserted := false
-		for i, stmt := range fn.Body.List {
-			if _, ok := stmt.(*ast.ReturnStmt); ok {
-				// Insert before return
-				newList := make([]ast.Stmt, 0, len(fn.Body.List)+1)
-				newList = append(newList, fn.Body.List[:i]...)
-				newList = append(newList, newStmt)
-				newList = append(newList, fn.Body.List[i:]...)
-				fn.Body.List = newList
-				inserted = true
-				break
-			}
-		}
-		if !inserted {
-			fn.Body.List = append(fn.Body.List, newStmt)
-		}
-		return nil
+	fn := findFunctionInAST(f, []string{"defineNodes", "build"})
+	if fn == nil {
+		return fmt.Errorf("defineNodes or build function not found in AST")
 	}
 
-	return fmt.Errorf("build function not found in AST")
+	receiverName := getReceiverName(fn, "arch")
+
+	// Create type expression from nodeType parameter
+	// Use domain.Service, domain.Database, etc.
+	typeExpr := &ast.SelectorExpr{
+		X:   ast.NewIdent("domain"),
+		Sel: ast.NewIdent(nodeType),
+	}
+
+	// Create: <receiver>.DefineNode("id", <Type>, "name", "desc")
+	newStmt := &ast.ExprStmt{
+		X: &ast.CallExpr{
+			Fun: &ast.SelectorExpr{
+				X:   ast.NewIdent(receiverName),
+				Sel: ast.NewIdent("DefineNode"),
+			},
+			Args: []ast.Expr{
+				&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", nodeID)},
+				typeExpr,
+				&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", name)},
+				&ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", desc)},
+			},
+		},
+	}
+
+	insertStmtBeforeReturn(fn, newStmt)
+	return nil
 }
 
 // UpdateNodePropertyInAST updates a specific property (name, description, owner, etc.) of a node.

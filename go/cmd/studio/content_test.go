@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/sokoide/advent-of-calm-2025/cmd/studio/handlers"
+	"github.com/sokoide/advent-of-calm-2025/internal/infra/filesystem"
 	"github.com/sokoide/advent-of-calm-2025/internal/usecase"
 )
 
@@ -28,11 +29,15 @@ func TestRegenerate_ReadsGoDSL(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a test State with zero-value StudioService (not used in this test)
-	testState := handlers.NewState(tmpDir, usecase.StudioService{})
+	// Create a test State with necessary dependencies
+	dslRepo := filesystem.NewFileSystemDSLRepository(
+		filepath.Join(tmpDir, "internal/usecase/ecommerce_architecture.go"),
+	)
+	syncUseCase := usecase.NewCodeSyncUseCase(dslRepo, nil, nil, nil)
+	testState := handlers.NewState(tmpDir, usecase.StudioService{}, syncUseCase)
 
 	// Test file reading
-	data, err := testState.ReadGoDSL()
+	data, err := testState.SyncUseCase.ReadDSL()
 	if err != nil {
 		t.Errorf("expected to read Go DSL, got error: %v", err)
 	}

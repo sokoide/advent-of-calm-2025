@@ -19,7 +19,7 @@
 - **Go Test**: `make test` によるユニットテスト実行と、`make test-coverage` によるカバレッジ計測。
 - **D2**: 建築図面の高度なレンダリングエンジン。
 - **Mermaid**: 軽量な図面レンダリング（Live Preview用）。
-- **golines**: 120文字制限を遵守するためのGoコード整形ツール。
+- **gofmt**: Go 標準のコード整形ツール。
 - **jq**: JSONデータの加工・比較。
 
 ## Architecture & Patterns

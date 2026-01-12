@@ -3,6 +3,7 @@ package parser
 import (
 	"bufio"
 	"encoding/json"
+	"log"
 	"regexp"
 	"strings"
 
@@ -208,11 +209,17 @@ func parseNodeAnnotation(node *domain.Node, key, value string) {
 	case "description":
 		node.Description = unescapeD2String(value)
 	case "metadata":
-		json.Unmarshal([]byte(value), &node.Metadata)
+		if err := json.Unmarshal([]byte(value), &node.Metadata); err != nil {
+			log.Printf("Warning: failed to unmarshal metadata for node %s: %v", node.UniqueID, err)
+		}
 	case "interfaces":
-		json.Unmarshal([]byte(value), &node.Interfaces)
+		if err := json.Unmarshal([]byte(value), &node.Interfaces); err != nil {
+			log.Printf("Warning: failed to unmarshal interfaces for node %s: %v", node.UniqueID, err)
+		}
 	case "controls":
-		json.Unmarshal([]byte(value), &node.Controls)
+		if err := json.Unmarshal([]byte(value), &node.Controls); err != nil {
+			log.Printf("Warning: failed to unmarshal controls for node %s: %v", node.UniqueID, err)
+		}
 	}
 }
 
@@ -232,18 +239,24 @@ func parseRelAnnotation(rel *domain.Relationship, key, value string) {
 		rel.DataClassification = value
 	case "srcInterfaces":
 		var intfs []string
-		json.Unmarshal([]byte(value), &intfs)
+		if err := json.Unmarshal([]byte(value), &intfs); err != nil {
+			log.Printf("Warning: failed to unmarshal srcInterfaces for rel %s: %v", rel.UniqueID, err)
+		}
 		if rel.RelationshipType.Connects != nil {
 			rel.RelationshipType.Connects.Source.Interfaces = intfs
 		}
 	case "dstInterfaces":
 		var intfs []string
-		json.Unmarshal([]byte(value), &intfs)
+		if err := json.Unmarshal([]byte(value), &intfs); err != nil {
+			log.Printf("Warning: failed to unmarshal dstInterfaces for rel %s: %v", rel.UniqueID, err)
+		}
 		if rel.RelationshipType.Connects != nil {
 			rel.RelationshipType.Connects.Destination.Interfaces = intfs
 		}
 	case "metadata":
-		json.Unmarshal([]byte(value), &rel.Metadata)
+		if err := json.Unmarshal([]byte(value), &rel.Metadata); err != nil {
+			log.Printf("Warning: failed to unmarshal metadata for rel %s: %v", rel.UniqueID, err)
+		}
 	case "type":
 		if value == "interacts" {
 			// Convert to interacts type
@@ -260,7 +273,9 @@ func parseRelAnnotation(rel *domain.Relationship, key, value string) {
 func parseFlowAnnotation(flow *domain.Flow, key, value string) {
 	switch key {
 	case "metadata":
-		json.Unmarshal([]byte(value), &flow.Metadata)
+		if err := json.Unmarshal([]byte(value), &flow.Metadata); err != nil {
+			log.Printf("Warning: failed to unmarshal metadata for flow %s: %v", flow.UniqueID, err)
+		}
 	}
 }
 

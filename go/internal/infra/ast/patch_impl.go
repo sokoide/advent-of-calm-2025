@@ -12,203 +12,53 @@ import (
 )
 
 // ApplyPatch applies a list of patch operations to the source.
-func (GoASTSyncer) ApplyPatch(src string, ops []domain.PatchOperation) (string, error) {
+func (s GoASTSyncer) ApplyPatch(src string, ops []domain.PatchOperation) (string, error) {
 	fset, f, err := parseSource(src)
 	if err != nil {
 		return "", err
 	}
 
 	for _, op := range ops {
+		var err error
 		switch op.Type {
 		case domain.PatchAddNode:
-			// Add a new DefineNode call
-			if op.NodeID == "" || op.NodeName == "" {
-				log.Printf("Warning: add-node requires nodeId and nodeName")
-				continue
-			}
-			nodeType := op.NodeTypeName
-			if nodeType == "" {
-				nodeType = "Service"
-			}
-			if err := AddNodeInAST(f, op.NodeID, nodeType, op.NodeName, op.NodeDesc); err != nil {
-				return "", fmt.Errorf("failed to add node %s: %w", op.NodeID, err)
-			}
+			err = s.handlePatchAddNode(f, op)
 		case domain.PatchUpdateNode:
-			if op.Origin != nil {
-				if err := updateNodeAtLine(f, fset, op); err != nil {
-					return "", fmt.Errorf("failed to update node at line %d: %w", op.Origin.Line, err)
-				}
-			} else if op.NodeID != "" {
-				// Fallback to nodeId lookup (legacy syncAST behavior)
-				valStr := fmt.Sprintf("%v", op.Value)
-				if err := UpdateNodePropertyInAST(f, op.NodeID, op.Property, valStr); err != nil {
-					return "", fmt.Errorf("failed to update node %s: %w", op.NodeID, err)
-				}
-			} else {
-				log.Printf("Warning: update-node requires origin or nodeId: %v", op)
-				continue
-			}
+			err = s.handlePatchUpdateNode(f, fset, op)
 		case domain.PatchDeleteNode:
-			// IMPORTANT: Find variable name BEFORE deleting the node definition
-			var varName string
-			if op.NodeID != "" {
-				varName = findVariableNameForNodeID(f, op.NodeID)
-				if varName != "" {
-					log.Printf("Cascade delete: found variable name '%s' for nodeID '%s'", varName, op.NodeID)
-				} else {
-					log.Printf("Cascade delete: no variable name found for nodeID '%s'", op.NodeID)
-				}
-			}
-
-			if op.Origin != nil {
-				if op.Origin.LoopVar != "" {
-					// Loop node deletion = Decrement loop variable
-					if err := updateLoopVariable(f, op.Origin.LoopVar, -1); err != nil {
-						return "", fmt.Errorf("failed to decrement loop var %s: %w", op.Origin.LoopVar, err)
-					}
-				} else {
-					// Explicit node deletion = Remove statement
-					if err := deleteNodeAtLine(f, fset, op.Origin.Line); err != nil {
-						return "", fmt.Errorf("failed to delete node at line %d: %w", op.Origin.Line, err)
-					}
-				}
-			} else if op.NodeID != "" {
-				// Fallback to nodeId lookup (legacy syncAST behavior)
-				if err := DeleteNodeInAST(f, op.NodeID); err != nil {
-					return "", fmt.Errorf("failed to delete node %s: %w", op.NodeID, err)
-				}
-			} else {
-				log.Printf("Warning: delete-node requires origin or nodeId: %v", op)
-				continue
-			}
-
-			// Cascade delete: Remove relationships that reference this node
-			if varName != "" || op.NodeID != "" {
-				deleteRelationshipsReferencingVariable(f, varName, op.NodeID)
-				deleteComposedOfReferencingVariable(f, varName, op.NodeID)
-			}
+			err = s.handlePatchDeleteNode(f, fset, op)
 		case domain.PatchDeleteRelationship:
-			// Delete Connect() call by relationship ID (no origin needed)
-			if op.NodeID == "" {
-				log.Printf("Warning: delete-relationship requires nodeId (relationship ID)")
-				continue
-			}
-			if err := deleteRelationshipByID(f, op.NodeID); err != nil {
-				return "", fmt.Errorf("failed to delete relationship %s: %w", op.NodeID, err)
-			}
+			err = s.handlePatchDeleteRelationship(f, op)
 		case domain.PatchAddRelationship:
-			// Add a new Connect() or Interacts() call
-			if op.NodeID == "" || op.SourceNode == "" || op.TargetNode == "" {
-				log.Printf("Warning: add-relationship requires nodeId, sourceNode, and targetNode")
-				continue
-			}
-			if err := addRelationshipToAST(f, fset, op.NodeID, op.SourceNode, op.TargetNode, op.IsInteracts); err != nil {
-				return "", fmt.Errorf("failed to add relationship %s: %w", op.NodeID, err)
-			}
+			err = s.handlePatchAddRelationship(f, fset, op)
 		case domain.PatchAddInterface:
-			// Add a new Interface() call for a node
-			if op.NodeID == "" || op.InterfaceID == "" || op.Protocol == "" {
-				log.Printf("Warning: add-interface requires nodeId, interfaceId, and protocol")
-				continue
-			}
-			if err := addInterfaceToAST(f, fset, op.NodeID, op.InterfaceID, op.Protocol); err != nil {
-				return "", fmt.Errorf("failed to add interface %s to %s: %w", op.InterfaceID, op.NodeID, err)
-			}
+			err = s.handlePatchAddInterface(f, fset, op)
 		case domain.PatchDeleteInterface:
-			// Delete Interface() call
-			if op.InterfaceID == "" {
-				log.Printf("Warning: delete-interface requires interfaceId")
-				continue
-			}
-			if err := deleteInterfaceFromAST(f, op.InterfaceID); err != nil {
-				return "", fmt.Errorf("failed to delete interface %s: %w", op.InterfaceID, err)
-			}
+			err = s.handlePatchDeleteInterface(f, op)
 		case domain.PatchDeleteFlow:
-			// Delete DefineFlow() call
-			if op.FlowID == "" {
-				log.Printf("Warning: delete-flow requires flowId")
-				continue
-			}
-			if err := deleteFlowFromAST(f, op.FlowID); err != nil {
-				return "", fmt.Errorf("failed to delete flow %s: %w", op.FlowID, err)
-			}
+			err = s.handlePatchDeleteFlow(f, op)
 		case domain.PatchAddFlow:
-			if op.FlowID == "" || op.FlowName == "" {
-				log.Printf("Warning: add-flow requires flowId and flowName")
-				continue
-			}
-			if err := addFlowToAST(f, op.FlowID, op.FlowName, op.FlowDesc, op.FlowSteps); err != nil {
-				return "", fmt.Errorf("failed to add flow %s: %w", op.FlowID, err)
-			}
+			err = s.handlePatchAddFlow(f, op)
 		case domain.PatchUpdateFlow:
-			if op.FlowID == "" {
-				log.Printf("Warning: update-flow requires flowId")
-				continue
-			}
-			if err := updateFlowInAST(f, op.FlowID, op.FlowName, op.FlowDesc, op.FlowSteps); err != nil {
-				return "", fmt.Errorf("failed to update flow %s: %w", op.FlowID, err)
-			}
+			err = s.handlePatchUpdateFlow(f, op)
 		case domain.PatchAddComposedOf:
-			if op.ContainerID == "" || len(op.ChildNodeIDs) == 0 {
-				log.Printf("Warning: add-composed-of requires containerId and childNodeIds")
-				continue
-			}
-			if err := addComposedOfToAST(f, op.NodeID, op.ContainerID, op.ChildNodeIDs); err != nil {
-				return "", fmt.Errorf("failed to add composed-of: %w", err)
-			}
+			err = s.handlePatchAddComposedOf(f, op)
 		case domain.PatchAddControl:
-			if op.ControlID == "" {
-				log.Printf("Warning: add-control requires controlId")
-				continue
-			}
-			if err := addControlToAST(f, op.ControlID, op.ControlDesc); err != nil {
-				return "", fmt.Errorf("failed to add control %s: %w", op.ControlID, err)
-			}
+			err = s.handlePatchAddControl(f, op)
 		case domain.PatchDeleteControl:
-			if op.ControlID == "" {
-				log.Printf("Warning: delete-control requires controlId")
-				continue
-			}
-			if err := deleteControlFromAST(f, op.ControlID); err != nil {
-				return "", fmt.Errorf("failed to delete control %s: %w", op.ControlID, err)
-			}
+			err = s.handlePatchDeleteControl(f, op)
 		case domain.PatchDeleteComposedOf:
-			if op.ComposedOfID == "" {
-				log.Printf("Warning: delete-composed-of requires composedOfId")
-				continue
-			}
-			if err := deleteComposedOfFromAST(f, op.ComposedOfID); err != nil {
-				return "", fmt.Errorf("failed to delete composed-of %s: %w", op.ComposedOfID, err)
-			}
+			err = s.handlePatchDeleteComposedOf(f, op)
 		case domain.PatchUpdateComposedOf:
-			if op.ComposedOfID == "" {
-				log.Printf("Warning: update-composed-of requires composedOfId")
-				continue
-			}
-			if err := updateComposedOfInAST(f, op.ComposedOfID, op.ComposedOfDesc, op.ChildNodeIDs); err != nil {
-				return "", fmt.Errorf("failed to update composed-of %s: %w", op.ComposedOfID, err)
-			}
+			err = s.handlePatchUpdateComposedOf(f, op)
 		case domain.PatchUpdateControl:
-			if op.ControlID == "" {
-				log.Printf("Warning: update-control requires controlId")
-				continue
-			}
-			if err := updateControlInAST(f, op.ControlID, op.ControlDesc); err != nil {
-				return "", fmt.Errorf("failed to update control %s: %w", op.ControlID, err)
-			}
+			err = s.handlePatchUpdateControl(f, op)
 		case domain.PatchUpdateRelationship:
-			// Support both Connect/Interacts (using NodeID) and ComposedOf (using ComposedOfID)
-			relationshipID := op.NodeID
-			if relationshipID == "" {
-				relationshipID = op.ComposedOfID
-			}
-			if relationshipID == "" {
-				log.Printf("Warning: update-relationship requires nodeId or composedOfId")
-				continue
-			}
-			if err := updateRelationshipInAST(f, relationshipID, op.Property, op.Value); err != nil {
-				return "", fmt.Errorf("failed to update relationship %s: %w", relationshipID, err)
-			}
+			err = s.handlePatchUpdateRelationship(f, op)
+		}
+
+		if err != nil {
+			return "", err
 		}
 	}
 
@@ -218,6 +68,232 @@ func (GoASTSyncer) ApplyPatch(src string, ops []domain.PatchOperation) (string, 
 	}
 
 	return result, nil
+}
+
+func (GoASTSyncer) handlePatchAddNode(f *ast.File, op domain.PatchOperation) error {
+	if op.NodeID == "" || op.NodeName == "" {
+		log.Printf("Warning: add-node requires nodeId and nodeName")
+		return nil
+	}
+	nodeType := op.NodeTypeName
+	if nodeType == "" {
+		nodeType = "Service"
+	}
+	if err := AddNodeInAST(f, op.NodeID, nodeType, op.NodeName, op.NodeDesc); err != nil {
+		return fmt.Errorf("failed to add node %s: %w", op.NodeID, err)
+	}
+	return nil
+}
+
+func (GoASTSyncer) handlePatchUpdateNode(f *ast.File, fset *token.FileSet, op domain.PatchOperation) error {
+	if op.Origin != nil {
+		if err := updateNodeAtLine(f, fset, op); err != nil {
+			return fmt.Errorf("failed to update node at line %d: %w", op.Origin.Line, err)
+		}
+	} else if op.NodeID != "" {
+		valStr := fmt.Sprintf("%v", op.Value)
+		if err := UpdateNodePropertyInAST(f, op.NodeID, op.Property, valStr); err != nil {
+			return fmt.Errorf("failed to update node %s: %w", op.NodeID, err)
+		}
+	} else {
+		log.Printf("Warning: update-node requires origin or nodeId: %v", op)
+	}
+	return nil
+}
+
+func (GoASTSyncer) handlePatchDeleteNode(f *ast.File, fset *token.FileSet, op domain.PatchOperation) error {
+	var varName string
+	if op.NodeID != "" {
+		varName = findVariableNameForNodeID(f, op.NodeID)
+		if varName != "" {
+			log.Printf("Cascade delete: found variable name '%s' for nodeID '%s'", varName, op.NodeID)
+		} else {
+			log.Printf("Cascade delete: no variable name found for nodeID '%s'", op.NodeID)
+		}
+	}
+
+	if op.Origin != nil {
+		if op.Origin.LoopVar != "" {
+			if err := updateLoopVariable(f, op.Origin.LoopVar, -1); err != nil {
+				return fmt.Errorf("failed to decrement loop var %s: %w", op.Origin.LoopVar, err)
+			}
+		} else {
+			if err := deleteNodeAtLine(f, fset, op.Origin.Line); err != nil {
+				return fmt.Errorf("failed to delete node at line %d: %w", op.Origin.Line, err)
+			}
+		}
+	} else if op.NodeID != "" {
+		if err := DeleteNodeInAST(f, op.NodeID); err != nil {
+			return fmt.Errorf("failed to delete node %s: %w", op.NodeID, err)
+		}
+	} else {
+		log.Printf("Warning: delete-node requires origin or nodeId: %v", op)
+		return nil
+	}
+
+	if varName != "" || op.NodeID != "" {
+		deleteRelationshipsReferencingVariable(f, varName, op.NodeID)
+		deleteComposedOfReferencingVariable(f, varName, op.NodeID)
+	}
+	return nil
+}
+
+func (GoASTSyncer) handlePatchDeleteRelationship(f *ast.File, op domain.PatchOperation) error {
+	if op.NodeID == "" {
+		log.Printf("Warning: delete-relationship requires nodeId (relationship ID)")
+		return nil
+	}
+	if err := deleteRelationshipByID(f, op.NodeID); err != nil {
+		return fmt.Errorf("failed to delete relationship %s: %w", op.NodeID, err)
+	}
+	return nil
+}
+
+func (GoASTSyncer) handlePatchAddRelationship(f *ast.File, fset *token.FileSet, op domain.PatchOperation) error {
+	if op.NodeID == "" || op.SourceNode == "" || op.TargetNode == "" {
+		log.Printf("Warning: add-relationship requires nodeId, sourceNode, and targetNode")
+		return nil
+	}
+	if err := addRelationshipToAST(f, fset, op.NodeID, op.SourceNode, op.TargetNode, op.IsInteracts); err != nil {
+		return fmt.Errorf("failed to add relationship %s: %w", op.NodeID, err)
+	}
+	return nil
+}
+
+func (GoASTSyncer) handlePatchAddInterface(f *ast.File, fset *token.FileSet, op domain.PatchOperation) error {
+	if op.NodeID == "" || op.InterfaceID == "" || op.Protocol == "" {
+		log.Printf("Warning: add-interface requires nodeId, interfaceId, and protocol")
+		return nil
+	}
+	if err := addInterfaceToAST(f, fset, op.NodeID, op.InterfaceID, op.Protocol); err != nil {
+		return fmt.Errorf("failed to add interface %s to %s: %w", op.InterfaceID, op.NodeID, err)
+	}
+	return nil
+}
+
+func (GoASTSyncer) handlePatchDeleteInterface(f *ast.File, op domain.PatchOperation) error {
+	if op.InterfaceID == "" {
+		log.Printf("Warning: delete-interface requires interfaceId")
+		return nil
+	}
+	if err := deleteInterfaceFromAST(f, op.InterfaceID); err != nil {
+		return fmt.Errorf("failed to delete interface %s: %w", op.InterfaceID, err)
+	}
+	return nil
+}
+
+func (GoASTSyncer) handlePatchDeleteFlow(f *ast.File, op domain.PatchOperation) error {
+	if op.FlowID == "" {
+		log.Printf("Warning: delete-flow requires flowId")
+		return nil
+	}
+	if err := deleteFlowFromAST(f, op.FlowID); err != nil {
+		return fmt.Errorf("failed to delete flow %s: %w", op.FlowID, err)
+	}
+	return nil
+}
+
+func (GoASTSyncer) handlePatchAddFlow(f *ast.File, op domain.PatchOperation) error {
+	if op.FlowID == "" || op.FlowName == "" {
+		log.Printf("Warning: add-flow requires flowId and flowName")
+		return nil
+	}
+	if err := addFlowToAST(f, op.FlowID, op.FlowName, op.FlowDesc, op.FlowSteps); err != nil {
+		return fmt.Errorf("failed to add flow %s: %w", op.FlowID, err)
+	}
+	return nil
+}
+
+func (GoASTSyncer) handlePatchUpdateFlow(f *ast.File, op domain.PatchOperation) error {
+	if op.FlowID == "" {
+		log.Printf("Warning: update-flow requires flowId")
+		return nil
+	}
+	if err := updateFlowInAST(f, op.FlowID, op.FlowName, op.FlowDesc, op.FlowSteps); err != nil {
+		return fmt.Errorf("failed to update flow %s: %w", op.FlowID, err)
+	}
+	return nil
+}
+
+func (GoASTSyncer) handlePatchAddComposedOf(f *ast.File, op domain.PatchOperation) error {
+	if op.ContainerID == "" || len(op.ChildNodeIDs) == 0 {
+		log.Printf("Warning: add-composed-of requires containerId and childNodeIds")
+		return nil
+	}
+	if err := addComposedOfToAST(f, op.NodeID, op.ContainerID, op.ChildNodeIDs); err != nil {
+		return fmt.Errorf("failed to add composed-of: %w", err)
+	}
+	return nil
+}
+
+func (GoASTSyncer) handlePatchAddControl(f *ast.File, op domain.PatchOperation) error {
+	if op.ControlID == "" {
+		log.Printf("Warning: add-control requires controlId")
+		return nil
+	}
+	if err := addControlToAST(f, op.ControlID, op.ControlDesc); err != nil {
+		return fmt.Errorf("failed to add control %s: %w", op.ControlID, err)
+	}
+	return nil
+}
+
+func (GoASTSyncer) handlePatchDeleteControl(f *ast.File, op domain.PatchOperation) error {
+	if op.ControlID == "" {
+		log.Printf("Warning: delete-control requires controlId")
+		return nil
+	}
+	if err := deleteControlFromAST(f, op.ControlID); err != nil {
+		return fmt.Errorf("failed to delete control %s: %w", op.ControlID, err)
+	}
+	return nil
+}
+
+func (GoASTSyncer) handlePatchDeleteComposedOf(f *ast.File, op domain.PatchOperation) error {
+	if op.ComposedOfID == "" {
+		log.Printf("Warning: delete-composed-of requires composedOfId")
+		return nil
+	}
+	if err := deleteComposedOfFromAST(f, op.ComposedOfID); err != nil {
+		return fmt.Errorf("failed to delete composed-of %s: %w", op.ComposedOfID, err)
+	}
+	return nil
+}
+
+func (GoASTSyncer) handlePatchUpdateComposedOf(f *ast.File, op domain.PatchOperation) error {
+	if op.ComposedOfID == "" {
+		log.Printf("Warning: update-composed-of requires composedOfId")
+		return nil
+	}
+	if err := updateComposedOfInAST(f, op.ComposedOfID, op.ComposedOfDesc, op.ChildNodeIDs); err != nil {
+		return fmt.Errorf("failed to update composed-of %s: %w", op.ComposedOfID, err)
+	}
+	return nil
+}
+
+func (GoASTSyncer) handlePatchUpdateControl(f *ast.File, op domain.PatchOperation) error {
+	if op.ControlID == "" {
+		log.Printf("Warning: update-control requires controlId")
+		return nil
+	}
+	if err := updateControlInAST(f, op.ControlID, op.ControlDesc); err != nil {
+		return fmt.Errorf("failed to update control %s: %w", op.ControlID, err)
+	}
+	return nil
+}
+
+func (GoASTSyncer) handlePatchUpdateRelationship(f *ast.File, op domain.PatchOperation) error {
+	relationshipID := op.NodeID
+	if relationshipID == "" {
+		relationshipID = op.ComposedOfID
+	}
+	if relationshipID == "" {
+		log.Printf("Warning: update-relationship requires nodeId or composedOfId")
+		return nil
+	}
+	if err := updateRelationshipInAST(f, relationshipID, op.Property, op.Value); err != nil {
+		return fmt.Errorf("failed to update relationship %s: %w", relationshipID, err)
+	}
+	return nil
 }
 
 func updateNodeAtLine(f *ast.File, fset *token.FileSet, op domain.PatchOperation) error {
@@ -1827,15 +1903,18 @@ func variableReferenceMatches(expr ast.Expr, varName string, nodeID string) bool
 
 // --- AST Helpers ---
 
+// findFunctionInAST searches for a function matching any of the nameParts,
+// respecting the order of nameParts as priority.
 func findFunctionInAST(f *ast.File, nameParts []string) *ast.FuncDecl {
-	for _, decl := range f.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Body == nil {
-			continue
-		}
-		nameLower := strings.ToLower(fn.Name.Name)
-		for _, part := range nameParts {
-			if strings.Contains(nameLower, strings.ToLower(part)) {
+	for _, part := range nameParts {
+		partLower := strings.ToLower(part)
+		for _, decl := range f.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil {
+				continue
+			}
+			nameLower := strings.ToLower(fn.Name.Name)
+			if strings.Contains(nameLower, partLower) {
 				return fn
 			}
 		}
@@ -1844,14 +1923,80 @@ func findFunctionInAST(f *ast.File, nameParts []string) *ast.FuncDecl {
 }
 
 func getReceiverName(fn *ast.FuncDecl, defaultName string) string {
-	if fn.Type.Params != nil && len(fn.Type.Params.List) > 0 {
-		for _, p := range fn.Type.Params.List {
-			if len(p.Names) > 0 {
-				return p.Names[0].Name
+	// 1. Check method receiver: func (a *Architecture) Method()
+	if fn.Recv != nil && len(fn.Recv.List) > 0 {
+		for _, p := range fn.Recv.List {
+			if isArchitectureType(p.Type) {
+				if len(p.Names) > 0 {
+					return p.Names[0].Name
+				}
 			}
 		}
 	}
+
+	// 2. Check parameters for *domain.Architecture or *Architecture
+	if fn.Type.Params != nil {
+		for _, p := range fn.Type.Params.List {
+			if isArchitectureType(p.Type) {
+				if len(p.Names) > 0 {
+					return p.Names[0].Name
+				}
+			}
+		}
+	}
+
+	// 3. Also check for local variable assignments like arch := domain.NewArchitecture(...)
+	if fn.Body != nil {
+		for _, stmt := range fn.Body.List {
+			assign, ok := stmt.(*ast.AssignStmt)
+			if !ok {
+				continue
+			}
+			for _, rhs := range assign.Rhs {
+				if isNewArchitectureCall(rhs) {
+					if len(assign.Lhs) > 0 {
+						if ident, ok := assign.Lhs[0].(*ast.Ident); ok {
+							return ident.Name
+						}
+					}
+				}
+			}
+		}
+	}
+
 	return defaultName
+}
+
+func isArchitectureType(expr ast.Expr) bool {
+	// Handles Architecture, *Architecture, domain.Architecture, *domain.Architecture
+	var target ast.Expr = expr
+	if star, ok := expr.(*ast.StarExpr); ok {
+		target = star.X
+	}
+
+	switch v := target.(type) {
+	case *ast.Ident:
+		return v.Name == "Architecture"
+	case *ast.SelectorExpr:
+		return v.Sel.Name == "Architecture"
+	}
+	return false
+}
+
+func isNewArchitectureCall(expr ast.Expr) bool {
+	call, ok := expr.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		// Might be a direct call if dot-imported
+		if ident, ok := call.Fun.(*ast.Ident); ok {
+			return ident.Name == "NewArchitecture"
+		}
+		return false
+	}
+	return sel.Sel.Name == "NewArchitecture"
 }
 
 func insertStmtBeforeReturn(fn *ast.FuncDecl, stmt ast.Stmt) {
