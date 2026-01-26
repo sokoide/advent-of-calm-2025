@@ -36,43 +36,18 @@ type LoopContext struct {
 	Max     int    // total iterations
 }
 
-// loopContextKey is used for storing loop context in Architecture.
-var currentLoopContext *LoopContext
-
-// SetLoopContext sets the current loop context for origin tracking.
-// Call this at the start of each loop iteration.
-// Example:
-//
-//	for i := 1; i <= numGateways; i++ {
-//	    domain.SetLoopContext("numGateways", i, numGateways)
-//	    arch.DefineNode(...)
-//	}
-//	domain.ClearLoopContext()
-func SetLoopContext(varName string, index, max int) {
-	currentLoopContext = &LoopContext{
-		VarName: varName,
-		Index:   index,
-		Max:     max,
-	}
-}
-
-// ClearLoopContext clears the current loop context.
-// Call this after the loop ends.
-func ClearLoopContext() {
-	currentLoopContext = nil
-}
-
 // DetectOrigin analyzes the call stack to determine how the node was created.
 // skipFrames should be set to skip internal frames (typically 2 for DefineNode).
-func DetectOrigin(skipFrames int) *NodeOrigin {
+// loopCtx is the current loop context, obtained from Architecture.GetLoopContext().
+func DetectOrigin(skipFrames int, loopCtx *LoopContext) *NodeOrigin {
 	origin := &NodeOrigin{Type: OriginExplicit}
 
 	// Check if we're in a loop context
-	if currentLoopContext != nil {
+	if loopCtx != nil {
 		origin.Type = OriginLoop
-		origin.LoopIndex = currentLoopContext.Index
-		origin.LoopMax = currentLoopContext.Max
-		origin.LoopVar = currentLoopContext.VarName
+		origin.LoopIndex = loopCtx.Index
+		origin.LoopMax = loopCtx.Max
+		origin.LoopVar = loopCtx.VarName
 	}
 
 	pc := make([]uintptr, 10)

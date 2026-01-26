@@ -379,7 +379,7 @@ func (a *Architecture) DefineNode(id string, ntype NodeType, name, desc string, 
 		Description: desc,
 		Metadata:    make(map[string]any),
 		Controls:    make(map[string]*Control),
-		Origin:      DetectOrigin(3), // Skip: runtime.Callers, DetectOrigin, DefineNode
+		Origin:      DetectOrigin(3, a.loopContext), // Skip: runtime.Callers, DetectOrigin, DefineNode
 	}
 	for _, opt := range opts {
 		opt(n)

@@ -22,6 +22,7 @@ type Architecture struct {
 	Flows         []*Flow             `json:"flows,omitempty"`
 	Nodes         []*Node             `json:"nodes"`
 	Relationships []*Relationship     `json:"relationships"`
+	loopContext   *LoopContext        `json:"-"` // Loop context for origin tracking (not exported)
 }
 
 type Metadata map[string]any
@@ -106,4 +107,32 @@ type RelationshipType struct {
 	Connects   *Connects      `json:"connects,omitempty"`
 	Interacts  map[string]any `json:"interacts,omitempty"`
 	ComposedOf map[string]any `json:"composed-of,omitempty"`
+}
+
+// SetLoopContext sets the current loop context for origin tracking.
+// Call this at the start of each loop iteration before defining nodes.
+// Example:
+//
+//	for i := 1; i <= numGateways; i++ {
+//	    arch.SetLoopContext("numGateways", i, numGateways)
+//	    arch.DefineNode(...)
+//	}
+//	arch.ClearLoopContext()
+func (a *Architecture) SetLoopContext(varName string, index, max int) {
+	a.loopContext = &LoopContext{
+		VarName: varName,
+		Index:   index,
+		Max:     max,
+	}
+}
+
+// ClearLoopContext clears the current loop context.
+// Call this after the loop ends.
+func (a *Architecture) ClearLoopContext() {
+	a.loopContext = nil
+}
+
+// GetLoopContext returns the current loop context, or nil if not in a loop.
+func (a *Architecture) GetLoopContext() *LoopContext {
+	return a.loopContext
 }

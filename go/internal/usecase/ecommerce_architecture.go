@@ -179,7 +179,7 @@ func defineNodes(a *domain.Architecture) *nodesContainer {
 	}
 
 	for i := 1; i <= numGateways; i++ {
-		domain.SetLoopContext("numGateways", i, numGateways)
+		a.SetLoopContext("numGateways", i, numGateways)
 		id := fmt.Sprintf("api-gateway-%d", i)
 		desc := "Primary API Gateway instance."
 		if i == 2 {
@@ -203,7 +203,7 @@ func defineNodes(a *domain.Architecture) *nodesContainer {
 		gw.Interface(fmt.Sprintf("gateway-%d-health", i), "HTTP").SetName("Health Check").SetPath("/health")
 		nc.Gateways = append(nc.Gateways, gw)
 	}
-	domain.ClearLoopContext()
+	a.ClearLoopContext()
 
 	orderFailures := []map[string]any{
 		{

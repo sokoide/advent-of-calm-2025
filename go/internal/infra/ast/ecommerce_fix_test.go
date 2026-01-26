@@ -48,7 +48,7 @@ func wireComponents(a *domain.Architecture, n *nodesContainer) *linksContainer {
 		if wireStart == -1 {
 			t.Fatal("wireComponents not found in output")
 		}
-		
+
 		wireContent := got[wireStart:]
 		if !strings.Contains(wireContent, `a.Connect`) || !strings.Contains(wireContent, `"new-rel-123"`) {
 			t.Errorf("Expected a.Connect in wireComponents, but it was not found or used wrong receiver name.\nFull output around wireComponents:\n%s", wireContent)
