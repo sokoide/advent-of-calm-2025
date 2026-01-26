@@ -10,6 +10,7 @@ go/architectures/layout/
 
 # AI
 .serena/
+.claude/
 conductor/archive/
 
 # Go
