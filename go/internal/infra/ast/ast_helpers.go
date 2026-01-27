@@ -8,6 +8,9 @@ import (
 
 // findFunctionInAST searches for a function matching any of the nameParts,
 // respecting the order of nameParts as priority.
+//
+// Uses substring matching (strings.Contains) on lowercase function names.
+// For example, searching for ["build"] will match "buildComponents", "rebuild", etc.
 func findFunctionInAST(f *ast.File, nameParts []string) *ast.FuncDecl {
 	for _, part := range nameParts {
 		partLower := strings.ToLower(part)
@@ -30,10 +33,8 @@ func getReceiverName(fn *ast.FuncDecl, defaultName string) string {
 	// 1. Check method receiver: func (a *Architecture) Method()
 	if fn.Recv != nil && len(fn.Recv.List) > 0 {
 		for _, p := range fn.Recv.List {
-			if isArchitectureType(p.Type) {
-				if len(p.Names) > 0 {
-					return p.Names[0].Name
-				}
+			if isArchitectureType(p.Type) && len(p.Names) > 0 {
+				return p.Names[0].Name
 			}
 		}
 	}
@@ -41,10 +42,8 @@ func getReceiverName(fn *ast.FuncDecl, defaultName string) string {
 	// 2. Check parameters for *domain.Architecture or *Architecture
 	if fn.Type.Params != nil {
 		for _, p := range fn.Type.Params.List {
-			if isArchitectureType(p.Type) {
-				if len(p.Names) > 0 {
-					return p.Names[0].Name
-				}
+			if isArchitectureType(p.Type) && len(p.Names) > 0 {
+				return p.Names[0].Name
 			}
 		}
 	}
@@ -57,11 +56,9 @@ func getReceiverName(fn *ast.FuncDecl, defaultName string) string {
 				continue
 			}
 			for _, rhs := range assign.Rhs {
-				if isNewArchitectureCall(rhs) {
-					if len(assign.Lhs) > 0 {
-						if ident, ok := assign.Lhs[0].(*ast.Ident); ok {
-							return ident.Name
-						}
+				if isNewArchitectureCall(rhs) && len(assign.Lhs) > 0 {
+					if ident, ok := assign.Lhs[0].(*ast.Ident); ok {
+						return ident.Name
 					}
 				}
 			}
