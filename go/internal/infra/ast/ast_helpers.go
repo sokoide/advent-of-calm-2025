@@ -153,15 +153,6 @@ func isDefineNode(call *ast.CallExpr) bool {
 	return ok && sel.Sel.Name == "DefineNode"
 }
 
-// isDefineNodeCallSimple checks if a call expression is a DefineNode call.
-func isDefineNodeCallSimple(call *ast.CallExpr) bool {
-	sel, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok {
-		return false
-	}
-	return sel.Sel.Name == "DefineNode"
-}
-
 // isDefineNodeCallWithID checks if expr is a DefineNode call for the specific nodeID, possibly inside a chain.
 func isDefineNodeCallWithID(expr ast.Expr, nodeID string) bool {
 	call, ok := expr.(*ast.CallExpr)

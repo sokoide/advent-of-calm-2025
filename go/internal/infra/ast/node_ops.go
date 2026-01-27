@@ -658,7 +658,7 @@ func findVariableNameForNodeID(f *ast.File, nodeID string) string {
 			return true
 		}
 
-		if !isDefineNodeCallSimple(call) {
+		if !isDefineNode(call) {
 			return true
 		}
 
